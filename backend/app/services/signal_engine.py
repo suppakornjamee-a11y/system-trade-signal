@@ -8,7 +8,25 @@ from .stock_service import get_company_profile
 
 
 def _direction_label(direction: str) -> str:
-    return "BUY / LONG" if direction == "long" else "SELL / SHORT"
+    return "BUY" if direction == "long" else "SELL / EXIT"
+
+
+def _entry_label(direction: str) -> str:
+    return "Buy zone" if direction == "long" else "Sell/exit zone"
+
+
+def _target_label(direction: str) -> str:
+    return "Target sell" if direction == "long" else "Downside target"
+
+
+def _stop_label(direction: str) -> str:
+    return "Cut loss" if direction == "long" else "Rebound invalidation"
+
+
+def _action_note(direction: str) -> str:
+    if direction == "long":
+        return "Action: consider buy/accumulate only if price confirms the setup."
+    return "Action: warning for holdings; consider reduce/exit if weakness confirms."
 
 
 def _trim_description(text: str, limit: int = 180) -> str:
@@ -122,14 +140,15 @@ def format_signal_message(signal: dict) -> str:
         f"<b>{html.escape(signal['signal'])} SIGNAL</b>",
         f"<b>{html.escape(signal['symbol'])}</b> - {html.escape(signal['name'])}",
         f"Score: <b>{signal['score']:.1f}</b> | Prob: {signal['probability_pct']:.1f}%",
+        html.escape(_action_note(signal["direction"])),
         "",
         f"Business: {html.escape(sector)} / {html.escape(industry)}",
         html.escape(signal["description"]),
         "",
         f"Current: {signal['price']:.2f} ({signal['change_pct']:+.2f}%)",
-        f"Entry: <b>{signal['entry']:.2f}</b>",
-        f"Target/Exit: <b>{signal['target']:.2f}</b>",
-        f"Stop loss: <b>{signal['stop_loss']:.2f}</b>",
+        f"{_entry_label(signal['direction'])}: <b>{signal['entry']:.2f}</b>",
+        f"{_target_label(signal['direction'])}: <b>{signal['target']:.2f}</b>",
+        f"{_stop_label(signal['direction'])}: <b>{signal['stop_loss']:.2f}</b>",
         f"Risk/Reward: {signal['risk_reward']:.2f}",
         "",
         "Reasons:",
