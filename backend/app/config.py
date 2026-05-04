@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     signal_cooldown_minutes: int = 30
     signal_min_score: float = 70.0
     signal_min_risk_reward: float = 1.2
-    signal_markets: str = "us,th"
+    signal_markets: str = "us,th,cn"
 
     @field_validator("debug", mode="before")
     @classmethod

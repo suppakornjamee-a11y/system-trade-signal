@@ -29,24 +29,46 @@ MARKET_WATCHLISTS: dict[str, list[str]] = {
         "BDMS.BK", "SCC.BK", "BBL.BK", "KBANK.BK", "KTB.BK",
         "TRUE.BK", "MINT.BK", "CPN.BK", "GULF.BK", "GPSC.BK",
         "IVL.BK", "PTTGC.BK", "TOP.BK", "DELTA.BK", "OSP.BK",
-        "HANA.BK", "BH.BK", "CPAXT.BK", "SPRC.BK",
+        "HANA.BK", "BH.BK", "CPAXT.BK", "SPRC.BK", "BEM.BK",
+        "BTS.BK", "TISCO.BK", "COM7.BK", "KCE.BK", "JMT.BK",
+        "SAWAD.BK", "GLOBAL.BK", "CRC.BK", "CBG.BK", "TIDLOR.BK",
     ],
     "cn": [
-        "600519.SS",  # Kweichow Moutai 贵州茅台
-        "600036.SS",  # China Merchants Bank 招商银行
-        "601318.SS",  # Ping An Insurance 中国平安
-        "300750.SZ",  # CATL 宁德时代
-        "002594.SZ",  # BYD 比亚迪
-        "601857.SS",  # PetroChina 中国石油
-        "600941.SS",  # China Mobile 中国移动
-        "601398.SS",  # ICBC 工商银行
-        "600900.SS",  # China Yangtze Power 长江电力
-        "601012.SS",  # LONGi Green Energy 隆基绿能
-        "002415.SZ",  # Hikvision 海康威视
-        "600030.SS",  # CITIC Securities 中信证券
-        "601088.SS",  # China Shenhua Energy 中国神华
-        "000858.SZ",  # Wuliangye 五粮液
-        "600309.SS",  # Wanhua Chemical 万华化学
+        # Hong Kong-listed China tech and EV names
+        "0700.HK",  # Tencent
+        "9988.HK",  # Alibaba
+        "3690.HK",  # Meituan
+        "1810.HK",  # Xiaomi
+        "9618.HK",  # JD.com
+        "9888.HK",  # Baidu
+        "9999.HK",  # NetEase
+        "1024.HK",  # Kuaishou
+        "0981.HK",  # SMIC
+        "1211.HK",  # BYD
+        "2015.HK",  # Li Auto
+        "9868.HK",  # XPeng
+        "9866.HK",  # NIO
+        "2318.HK",  # Ping An Insurance
+        "0941.HK",  # China Mobile
+        "1398.HK",  # ICBC
+        "3988.HK",  # Bank of China
+        "0883.HK",  # CNOOC
+        # Mainland A-shares
+        "600519.SS",  # Kweichow Moutai
+        "600036.SS",  # China Merchants Bank
+        "601318.SS",  # Ping An Insurance
+        "300750.SZ",  # CATL
+        "002594.SZ",  # BYD
+        "601857.SS",  # PetroChina
+        "600941.SS",  # China Mobile
+        "601398.SS",  # ICBC
+        "600900.SS",  # China Yangtze Power
+        "601012.SS",  # LONGi Green Energy
+        "002415.SZ",  # Hikvision
+        "600030.SS",  # CITIC Securities
+        "601088.SS",  # China Shenhua Energy
+        "000858.SZ",  # Wuliangye
+        "600309.SS",  # Wanhua Chemical
     ],
 }
 
@@ -60,7 +82,7 @@ TOP_N = 12
 
 
 def _momentum_rank(summary: dict) -> int:
-    """Score 1-5 for 2-3 day swing trading potential (หุ้นซิ่ง)."""
+    """Score 1-5 for short-term momentum trading potential."""
     score = 0
 
     # 1. Price momentum (0-3 pts)
@@ -96,7 +118,7 @@ def _momentum_rank(summary: dict) -> int:
     elif prob >= 55:
         score += 1
 
-    # Convert 0-10 → 1-5
+    # Convert 0-10 to 1-5
     if score <= 2:
         return 1
     if score <= 4:
