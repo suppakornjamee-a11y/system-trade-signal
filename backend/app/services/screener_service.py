@@ -23,8 +23,6 @@ MARKET_WATCHLISTS: dict[str, list[str]] = {
         "WMT", "HD", "NKE", "SBUX",
         # Popular retail / high-momentum
         "PLTR", "SOFI", "MARA", "RIOT", "COIN", "GME",
-        # ETFs
-        "SPY", "QQQ", "IWM", "SOXS", "TQQQ",
     ],
     "th": [
         "PTT.BK", "SCB.BK", "ADVANC.BK", "AOT.BK", "CPALL.BK",
