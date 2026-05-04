@@ -25,7 +25,7 @@ async def scan_and_notify() -> dict:
 
     for market in _configured_markets():
         try:
-            signals = build_trade_signals(market=market)
+            signals = await asyncio.to_thread(build_trade_signals, market=market)
         except Exception as exc:
             errors.append({"market": market, "error": str(exc)})
             continue

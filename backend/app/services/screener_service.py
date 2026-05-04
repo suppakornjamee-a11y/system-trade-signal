@@ -1,3 +1,5 @@
+from concurrent.futures import ThreadPoolExecutor, TimeoutError, as_completed
+
 from .. import cache as _cache
 from ..config import settings
 from .stock_service import get_quote
@@ -79,6 +81,8 @@ MARKET_THRESHOLDS = {
 }
 
 TOP_N = 12
+MAX_SCAN_WORKERS = 6
+MARKET_SCAN_TIMEOUT_SECONDS = 45
 
 
 def _momentum_rank(summary: dict) -> int:
@@ -198,10 +202,21 @@ def get_screener_results(market: str = "us") -> list[dict]:
 
     watchlist = MARKET_WATCHLISTS.get(market, MARKET_WATCHLISTS["us"])
     results = []
-    for symbol in watchlist:
-        summary = _build_stock_summary(symbol, market)
-        if summary:
-            results.append(summary)
+    workers = min(MAX_SCAN_WORKERS, len(watchlist))
+    executor = ThreadPoolExecutor(max_workers=workers)
+    futures = {
+        executor.submit(_build_stock_summary, symbol, market): symbol
+        for symbol in watchlist
+    }
+    try:
+        for future in as_completed(futures, timeout=MARKET_SCAN_TIMEOUT_SECONDS):
+            summary = future.result()
+            if summary:
+                results.append(summary)
+    except TimeoutError:
+        pass
+    finally:
+        executor.shutdown(wait=False, cancel_futures=True)
 
     results.sort(key=_interest_score, reverse=True)
     top = results[:TOP_N]

@@ -17,7 +17,7 @@ def get_quote(symbol: str) -> dict:
 
     t = _ticker(symbol)
     info = t.fast_info
-    hist = t.history(period="2d", interval="1d")
+    hist = t.history(period="2d", interval="1d", timeout=8)
 
     if hist.empty:
         raise ValueError(f"No data for {symbol}")
@@ -68,7 +68,7 @@ def get_candles(symbol: str, period: str = "1d", interval: str = "5m") -> list[d
         return cached
 
     t = _ticker(symbol)
-    hist = t.history(period=period, interval=interval)
+    hist = t.history(period=period, interval=interval, timeout=8)
 
     if hist.empty:
         return []
@@ -95,7 +95,7 @@ def get_history(symbol: str, period: str = "3mo", interval: str = "1d") -> pd.Da
         return cached
 
     t = _ticker(symbol)
-    df = t.history(period=period, interval=interval)
+    df = t.history(period=period, interval=interval, timeout=8)
     df.columns = [c.lower() for c in df.columns]
     _cache.set(key, df)
     return df
