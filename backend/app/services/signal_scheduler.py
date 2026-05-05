@@ -46,6 +46,7 @@ async def scan_and_notify() -> dict:
 
 
 async def run_signal_scheduler() -> None:
+    await asyncio.sleep(30)
     while True:
         try:
             await scan_and_notify()

@@ -4,38 +4,28 @@ import time
 from .. import cache as _cache
 from ..config import settings
 from .screener_service import get_screener_results
-from .stock_service import get_company_profile
 
 
 def _direction_label(direction: str) -> str:
-    return "BUY" if direction == "long" else "SELL / EXIT"
+    return "สัญญาณซื้อ" if direction == "long" else "สัญญาณขาย/ออก"
 
 
 def _entry_label(direction: str) -> str:
-    return "Buy zone" if direction == "long" else "Sell/exit zone"
+    return "โซนซื้อ" if direction == "long" else "โซนขาย/ออก"
 
 
 def _target_label(direction: str) -> str:
-    return "Target sell" if direction == "long" else "Downside target"
+    return "เป้าขายทำกำไร" if direction == "long" else "เป้าลงถัดไป"
 
 
 def _stop_label(direction: str) -> str:
-    return "Cut loss" if direction == "long" else "Rebound invalidation"
+    return "จุดตัดขาดทุน" if direction == "long" else "จุดยกเลิกสัญญาณขาย"
 
 
 def _action_note(direction: str) -> str:
     if direction == "long":
-        return "Action: consider buy/accumulate only if price confirms the setup."
-    return "Action: warning for holdings; consider reduce/exit if weakness confirms."
-
-
-def _trim_description(text: str, limit: int = 180) -> str:
-    cleaned = " ".join((text or "").split())
-    if not cleaned:
-        return "No company description available."
-    if len(cleaned) <= limit:
-        return cleaned
-    return cleaned[: limit - 3].rstrip() + "..."
+        return "คำแนะนำ: รอราคาเข้าโซนและมีแรงยืนยันก่อนซื้อ ไม่ไล่ราคาสูงเกินแผน"
+    return "คำแนะนำ: ถ้ามีหุ้นอยู่ให้ระวัง พิจารณาลดพอร์ต/ออกเมื่ออ่อนตัวตามสัญญาณ"
 
 
 def _signal_reasons(summary: dict) -> list[str]:
@@ -43,19 +33,19 @@ def _signal_reasons(summary: dict) -> list[str]:
     reasons = []
 
     if setup["probability_pct"] >= 75:
-        reasons.append(f"high setup score {setup['probability_pct']:.1f}%")
+        reasons.append(f"โอกาสตามแผนสูง {setup['probability_pct']:.1f}%")
     if summary["volume_ratio"] >= 1.5:
-        reasons.append(f"volume surge {summary['volume_ratio']:.2f}x")
+        reasons.append(f"วอลุ่มสูงกว่าปกติ {summary['volume_ratio']:.2f} เท่า")
     if abs(summary["change_pct"]) >= 2:
-        reasons.append(f"price momentum {summary['change_pct']:+.2f}%")
+        reasons.append(f"ราคาเคลื่อนไหวแรง {summary['change_pct']:+.2f}%")
     if setup["risk_reward"] >= 1.5:
-        reasons.append(f"risk/reward {setup['risk_reward']:.2f}")
+        reasons.append(f"ผลตอบแทนต่อความเสี่ยง {setup['risk_reward']:.2f}")
     if summary.get("news_sentiment") != "neutral":
-        reasons.append(f"news sentiment {summary['news_sentiment']}")
+        reasons.append(f"ข่าวเอนเอียงทาง {summary['news_sentiment']}")
     if summary.get("momentum_rank", 0) >= 4:
-        reasons.append(f"momentum rank {summary['momentum_rank']}/5")
+        reasons.append(f"แรงเหวี่ยง {summary['momentum_rank']}/5")
 
-    return reasons or ["technical setup meets short-term trading filters"]
+    return reasons or ["เข้าเงื่อนไขเทคนิคสำหรับเล่นสั้น"]
 
 
 def _score_signal(summary: dict) -> float:
@@ -93,14 +83,11 @@ def build_trade_signals(market: str = "us") -> list[dict]:
         if not _is_actionable(summary, score):
             continue
 
-        profile = get_company_profile(summary["symbol"])
         setup = summary["trade_setup"]
         signals.append({
             "symbol": summary["symbol"],
             "name": summary["name"],
             "market": market,
-            "company_profile": profile,
-            "description": _trim_description(profile.get("description", "")),
             "direction": setup["direction"],
             "signal": _direction_label(setup["direction"]),
             "score": score,
@@ -131,26 +118,20 @@ def mark_signal_sent(signal: dict) -> None:
 
 
 def format_signal_message(signal: dict) -> str:
-    profile = signal.get("company_profile") or {}
-    sector = profile.get("sector") or "N/A"
-    industry = profile.get("industry") or "N/A"
     reasons = "\n".join(f"- {html.escape(reason)}" for reason in signal["reasons"])
 
     return "\n".join([
-        f"<b>{html.escape(signal['signal'])} SIGNAL</b>",
+        f"<b>{html.escape(signal['signal'])}</b>",
         f"<b>{html.escape(signal['symbol'])}</b> - {html.escape(signal['name'])}",
-        f"Score: <b>{signal['score']:.1f}</b> | Prob: {signal['probability_pct']:.1f}%",
+        f"คะแนน: <b>{signal['score']:.1f}</b> | โอกาส: {signal['probability_pct']:.1f}%",
         html.escape(_action_note(signal["direction"])),
         "",
-        f"Business: {html.escape(sector)} / {html.escape(industry)}",
-        html.escape(signal["description"]),
-        "",
-        f"Current: {signal['price']:.2f} ({signal['change_pct']:+.2f}%)",
+        f"ราคาปัจจุบัน: {signal['price']:.2f} ({signal['change_pct']:+.2f}%)",
         f"{_entry_label(signal['direction'])}: <b>{signal['entry']:.2f}</b>",
         f"{_target_label(signal['direction'])}: <b>{signal['target']:.2f}</b>",
         f"{_stop_label(signal['direction'])}: <b>{signal['stop_loss']:.2f}</b>",
         f"Risk/Reward: {signal['risk_reward']:.2f}",
         "",
-        "Reasons:",
+        "เหตุผล:",
         reasons,
     ])
