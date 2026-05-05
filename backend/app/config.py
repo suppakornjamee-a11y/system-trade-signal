@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     anthropic_api_key: str = ""
     cache_ttl_seconds: int = 30
     screener_cache_ttl_seconds: int = 300
+    screener_include_news: bool = False
     telegram_bot_token: str = ""
     telegram_chat_id: str = ""
     signal_notifications_enabled: bool = False

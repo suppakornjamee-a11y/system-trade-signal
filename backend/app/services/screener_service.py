@@ -159,7 +159,10 @@ def _build_stock_summary(symbol: str, market: str) -> dict | None:
         if not ta:
             return None
 
-        news, news_sentiment, news_score = get_news_with_sentiment(symbol)
+        if settings.screener_include_news:
+            news, news_sentiment, news_score = get_news_with_sentiment(symbol)
+        else:
+            news, news_sentiment, news_score = [], "neutral", 50.0
         setup = calculate_trade_setup(ta, quote, news_score, news_sentiment)
 
         trend = ta.get("trend", "neutral")
@@ -214,7 +217,7 @@ def get_screener_results(market: str = "us") -> list[dict]:
     except TimeoutError:
         pass
     finally:
-        executor.shutdown(wait=False, cancel_futures=True)
+        executor.shutdown(wait=True, cancel_futures=True)
 
     results.sort(key=_interest_score, reverse=True)
     top = results[:TOP_N]

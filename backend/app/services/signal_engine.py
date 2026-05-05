@@ -68,10 +68,15 @@ def _score_signal(summary: dict) -> float:
 
 def _is_actionable(summary: dict, score: float) -> bool:
     setup = summary["trade_setup"]
+    market = summary.get("market")
+    min_score = 60.0 if market == "th" else settings.signal_min_score
+    min_risk_reward = 1.0 if market == "th" else settings.signal_min_risk_reward
+    min_volume_ratio = 0.8 if market == "th" else 1.0
+
     return (
-        score >= settings.signal_min_score
-        and setup["risk_reward"] >= settings.signal_min_risk_reward
-        and summary["volume_ratio"] >= 1.0
+        score >= min_score
+        and setup["risk_reward"] >= min_risk_reward
+        and summary["volume_ratio"] >= min_volume_ratio
         and setup["direction"] in ("long", "short")
     )
 
