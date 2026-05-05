@@ -12,7 +12,7 @@ def _direction_label(direction: str) -> str:
 
 
 def _entry_label(direction: str) -> str:
-    return "โซนซื้อ" if direction == "long" else "โซนขาย/ออก"
+    return "จุดเข้า Long/โซนซื้อ" if direction == "long" else "จุดเข้า Short/โซนขาย"
 
 
 def _target_label(direction: str) -> str:
