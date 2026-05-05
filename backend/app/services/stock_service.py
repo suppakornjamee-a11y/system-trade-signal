@@ -3,7 +3,12 @@ import time
 import yfinance as yf
 import pandas as pd
 from .. import cache as _cache
-from ..config import settings
+from ..config import BASE_DIR, settings
+
+
+YFINANCE_CACHE_DIR = BASE_DIR / ".cache" / "yfinance"
+YFINANCE_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+yf.set_tz_cache_location(str(YFINANCE_CACHE_DIR))
 
 
 def _ticker(symbol: str) -> yf.Ticker:

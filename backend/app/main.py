@@ -1,4 +1,5 @@
 import asyncio
+import logging
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -6,6 +7,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from .config import settings
 from .routers import screener, stocks, ws, news, signals
 from .services.signal_scheduler import run_signal_scheduler
+
+logger = logging.getLogger(__name__)
 
 app = FastAPI(title=settings.app_name, version="1.0.0")
 
@@ -27,7 +30,10 @@ app.include_router(signals.router, prefix="/api/signals", tags=["signals"])
 @app.on_event("startup")
 async def start_signal_scheduler():
     if settings.signal_notifications_enabled:
+        logger.info("Signal notification scheduler enabled")
         asyncio.create_task(run_signal_scheduler())
+    else:
+        logger.info("Signal notification scheduler disabled")
 
 
 @app.get("/health")

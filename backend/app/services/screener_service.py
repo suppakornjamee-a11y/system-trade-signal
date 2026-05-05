@@ -1,4 +1,5 @@
 from concurrent.futures import ThreadPoolExecutor, TimeoutError, as_completed
+import logging
 
 from .. import cache as _cache
 from ..config import settings
@@ -81,6 +82,10 @@ MARKET_THRESHOLDS = {
 TOP_N = 12
 MAX_SCAN_WORKERS = 3
 MARKET_SCAN_TIMEOUT_SECONDS = 30
+MAX_DIAGNOSTIC_ERRORS = 5
+
+logger = logging.getLogger(__name__)
+_LAST_SCAN_DIAGNOSTICS: dict[str, dict] = {}
 
 
 def _momentum_rank(summary: dict) -> int:
@@ -144,55 +149,58 @@ def _interest_score(summary: dict) -> float:
 
 def _build_stock_summary(symbol: str, market: str) -> dict | None:
     thresholds = MARKET_THRESHOLDS.get(market, MARKET_THRESHOLDS["us"])
-    try:
-        quote = get_quote(symbol)
-        avg_vol = quote.get("avg_volume", 1) or 1
-        volume_ratio = quote["volume"] / avg_vol
+    quote = get_quote(symbol)
+    avg_vol = quote.get("avg_volume", 1) or 1
+    volume_ratio = quote["volume"] / avg_vol
 
-        if (
-            abs(quote["change_pct"]) < thresholds["min_change_pct"]
-            and volume_ratio < thresholds["min_vol_ratio"]
-        ):
-            return None
-
-        ta = analyze(symbol)
-        if not ta:
-            return None
-
-        if settings.screener_include_news:
-            news, news_sentiment, news_score = get_news_with_sentiment(symbol)
-        else:
-            news, news_sentiment, news_score = [], "neutral", 50.0
-        setup = calculate_trade_setup(ta, quote, news_score, news_sentiment)
-
-        trend = ta.get("trend", "neutral")
-        if news_sentiment == "bullish" and trend in ("bullish", "neutral"):
-            signal = "bullish"
-        elif news_sentiment == "bearish" and trend in ("bearish", "neutral"):
-            signal = "bearish"
-        else:
-            signal = "neutral"
-
-        summary = {
-            "symbol": symbol,
-            "name": quote["name"],
-            "price": quote["price"],
-            "change": quote["change"],
-            "change_pct": quote["change_pct"],
-            "volume": quote["volume"],
-            "avg_volume": avg_vol,
-            "volume_ratio": round(volume_ratio, 2),
-            "market_cap": quote.get("market_cap"),
-            "news_sentiment": news_sentiment,
-            "news_count": len(news),
-            "signal": signal,
-            "trade_setup": setup,
-            "market": market,
-        }
-        summary["momentum_rank"] = _momentum_rank(summary)
-        return summary
-    except Exception:
+    if (
+        abs(quote["change_pct"]) < thresholds["min_change_pct"]
+        and volume_ratio < thresholds["min_vol_ratio"]
+    ):
         return None
+
+    ta = analyze(symbol)
+    if not ta:
+        return None
+
+    if settings.screener_include_news:
+        news, news_sentiment, news_score = get_news_with_sentiment(symbol)
+    else:
+        news, news_sentiment, news_score = [], "neutral", 50.0
+    setup = calculate_trade_setup(ta, quote, news_score, news_sentiment)
+
+    trend = ta.get("trend", "neutral")
+    if news_sentiment == "bullish" and trend in ("bullish", "neutral"):
+        signal = "bullish"
+    elif news_sentiment == "bearish" and trend in ("bearish", "neutral"):
+        signal = "bearish"
+    else:
+        signal = "neutral"
+
+    summary = {
+        "symbol": symbol,
+        "name": quote["name"],
+        "price": quote["price"],
+        "change": quote["change"],
+        "change_pct": quote["change_pct"],
+        "volume": quote["volume"],
+        "avg_volume": avg_vol,
+        "volume_ratio": round(volume_ratio, 2),
+        "market_cap": quote.get("market_cap"),
+        "news_sentiment": news_sentiment,
+        "news_count": len(news),
+        "signal": signal,
+        "trade_setup": setup,
+        "market": market,
+    }
+    summary["momentum_rank"] = _momentum_rank(summary)
+    return summary
+
+
+def get_last_screener_diagnostics(market: str | None = None) -> dict:
+    if market:
+        return _LAST_SCAN_DIAGNOSTICS.get(market, {})
+    return dict(_LAST_SCAN_DIAGNOSTICS)
 
 
 def get_screener_results(market: str = "us") -> list[dict]:
@@ -203,6 +211,9 @@ def get_screener_results(market: str = "us") -> list[dict]:
 
     watchlist = MARKET_WATCHLISTS.get(market, MARKET_WATCHLISTS["us"])
     results = []
+    failures = []
+    failure_count = 0
+    completed = 0
     workers = min(MAX_SCAN_WORKERS, len(watchlist))
     executor = ThreadPoolExecutor(max_workers=workers)
     futures = {
@@ -211,15 +222,33 @@ def get_screener_results(market: str = "us") -> list[dict]:
     }
     try:
         for future in as_completed(futures, timeout=MARKET_SCAN_TIMEOUT_SECONDS):
-            summary = future.result()
+            symbol = futures[future]
+            completed += 1
+            try:
+                summary = future.result()
+            except Exception as exc:
+                failure_count += 1
+                if len(failures) < MAX_DIAGNOSTIC_ERRORS:
+                    failures.append({"symbol": symbol, "error": str(exc)})
+                continue
             if summary:
                 results.append(summary)
     except TimeoutError:
-        pass
+        logger.warning("Screener scan timed out for %s after %s seconds", market, MARKET_SCAN_TIMEOUT_SECONDS)
     finally:
         executor.shutdown(wait=True, cancel_futures=True)
 
     results.sort(key=_interest_score, reverse=True)
     top = results[:TOP_N]
+    _LAST_SCAN_DIAGNOSTICS[market] = {
+        "watchlist_count": len(watchlist),
+        "completed_count": completed,
+        "candidate_count": len(results),
+        "returned_count": len(top),
+        "failure_count": len(watchlist) - completed + failure_count,
+        "sample_errors": failures,
+    }
+    if not top and failures:
+        logger.warning("Screener returned no %s results; sample errors: %s", market, failures)
     _cache.set(cache_key, top)
     return top

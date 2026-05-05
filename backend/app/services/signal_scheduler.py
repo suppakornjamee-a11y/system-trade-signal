@@ -8,6 +8,7 @@ from .signal_engine import (
     mark_signal_sent,
     should_send_signal,
 )
+from .screener_service import get_last_screener_diagnostics
 from .telegram_service import send_telegram_message
 
 logger = logging.getLogger(__name__)
@@ -22,10 +23,12 @@ async def scan_and_notify() -> dict:
     sent = []
     skipped = []
     errors = []
+    diagnostics = {}
 
     for market in _configured_markets():
         try:
             signals = await asyncio.to_thread(build_trade_signals, market=market)
+            diagnostics[market] = get_last_screener_diagnostics(market)
         except Exception as exc:
             errors.append({"market": market, "error": str(exc)})
             continue
@@ -42,11 +45,12 @@ async def scan_and_notify() -> dict:
             except Exception as exc:
                 errors.append({"symbol": signal["symbol"], "error": str(exc)})
 
-    return {"sent": sent, "skipped": skipped, "errors": errors}
+    result = {"sent": sent, "skipped": skipped, "errors": errors, "diagnostics": diagnostics}
+    logger.info("Signal scan finished: %s", result)
+    return result
 
 
 async def run_signal_scheduler() -> None:
-    await asyncio.sleep(30)
     while True:
         try:
             await scan_and_notify()
