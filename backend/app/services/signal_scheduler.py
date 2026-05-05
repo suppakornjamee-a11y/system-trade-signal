@@ -11,7 +11,7 @@ from .signal_engine import (
 from .screener_service import get_last_screener_diagnostics
 from .telegram_service import send_telegram_message
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("uvicorn.error")
 
 
 def _configured_markets() -> list[str]:
