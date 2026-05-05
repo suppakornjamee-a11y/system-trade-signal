@@ -25,6 +25,13 @@ class Settings(BaseSettings):
     signal_min_score: float = 70.0
     signal_min_risk_reward: float = 1.2
     signal_markets: str = "us,th,cn"
+    snack_trade_enabled: bool = True
+    snack_trade_min_score: float = 58.0
+    snack_trade_min_risk_reward: float = 1.0
+    snack_trade_min_volume_ratio: float = 0.5
+    snack_trade_max_per_market: int = 1
+    snack_trade_max_entry_distance_pct: float = 8.0
+    snack_trade_min_target_room_pct: float = 1.0
 
     @field_validator("debug", mode="before")
     @classmethod
