@@ -8,6 +8,7 @@ from .signal_engine import (
     mark_signal_sent,
     should_send_signal,
 )
+from .market_hours import market_status
 from .screener_service import get_last_screener_diagnostics
 from .telegram_service import send_telegram_message
 
@@ -26,16 +27,25 @@ async def scan_and_notify() -> dict:
     diagnostics = {}
 
     for market in _configured_markets():
+        status = market_status(market)
+        if not status["is_open"]:
+            skipped.append({"market": market, "reason": "market_closed", "local_time": status.get("local_time")})
+            diagnostics[market] = {"market_hours": status}
+            continue
+
         try:
             signals = await asyncio.to_thread(build_trade_signals, market=market)
-            diagnostics[market] = get_last_screener_diagnostics(market)
+            diagnostics[market] = {
+                "market_hours": status,
+                "screener": get_last_screener_diagnostics(market),
+            }
         except Exception as exc:
             errors.append({"market": market, "error": str(exc)})
             continue
 
         for signal in signals:
             if not should_send_signal(signal):
-                skipped.append({"symbol": signal["symbol"], "reason": "cooldown"})
+                skipped.append({"symbol": signal["symbol"], "reason": "already_sent"})
                 continue
 
             try:

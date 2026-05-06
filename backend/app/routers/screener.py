@@ -5,7 +5,7 @@ router = APIRouter()
 
 
 @router.get("/today")
-def screener_today(market: str = Query("us", pattern="^(us|th|cn)$")):
+def screener_today(market: str = Query("us", pattern="^(us|th|cn|gold)$")):
     try:
         return get_screener_results(market=market)
     except Exception as e:

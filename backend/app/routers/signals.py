@@ -7,7 +7,7 @@ router = APIRouter()
 
 
 @router.get("")
-def list_signals(market: str = Query("us", pattern="^(us|th|cn)$")):
+def list_signals(market: str = Query("us", pattern="^(us|th|cn|gold)$")):
     try:
         return build_trade_signals(market=market)
     except Exception as exc:

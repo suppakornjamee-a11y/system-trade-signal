@@ -11,6 +11,16 @@ def _direction_label(direction: str) -> str:
     return "สัญญาณซื้อ" if direction == "long" else "สัญญาณขาย/ออก"
 
 
+def _market_label(market: str) -> str:
+    labels = {
+        "us": "หุ้นสหรัฐ",
+        "th": "หุ้นไทย",
+        "cn": "หุ้นจีน/HK",
+        "gold": "ทองคำ",
+    }
+    return labels.get(market, market.upper())
+
+
 def _entry_label(direction: str) -> str:
     return "จุดเข้า Long/โซนซื้อ" if direction == "long" else "จุดเข้า Short/โซนขาย"
 
@@ -25,8 +35,8 @@ def _stop_label(direction: str) -> str:
 
 def _action_note(direction: str) -> str:
     if direction == "long":
-        return "คำแนะนำ: รอราคาเข้าโซนและมีแรงยืนยันก่อนซื้อ ไม่ไล่ราคาสูงเกินแผน"
-    return "คำแนะนำ: ถ้ามีหุ้นอยู่ให้ระวัง พิจารณาลดพอร์ต/ออกเมื่ออ่อนตัวตามสัญญาณ"
+        return "คำแนะนำ: ราคาตอนนี้อยู่ใกล้โซนเข้าแล้ว ใช้แผนนี้ได้ทันทีถ้ายืนยันด้วยแท่ง/วอลุ่มตามระบบ และห้ามไล่ถ้าราคาเริ่มหนีโซน"
+    return "คำแนะนำ: ราคาตอนนี้อยู่ใกล้โซนขาย/ลดพอร์ตแล้ว ใช้เป็นจุดระวังหรือจุดออกตามแผน"
 
 
 def _signal_reasons(summary: dict) -> list[str]:
@@ -51,8 +61,8 @@ def _signal_reasons(summary: dict) -> list[str]:
 
 def _snack_trade_note(direction: str) -> str:
     if direction == "long":
-        return "หมายเหตุค่าขนม: ตัวนี้ยังไม่ใช่สัญญาณหลัก เล่นเบา ๆ เท่านั้น ลดไซซ์ รอราคาเข้าโซน และห้ามไล่ถ้าราคาเลยแผน"
-    return "หมายเหตุค่าขนม: ตัวนี้ยังไม่ใช่สัญญาณหลัก เล่นเบา ๆ เท่านั้น ลดไซซ์ และใช้เป็นจุดระวัง/ลดพอร์ต ไม่ใช่จุดใส่สุด"
+        return "หมายเหตุค่าขนม: ตัวนี้ยังไม่ใช่สัญญาณหลัก แต่ราคายังอยู่ใกล้โซนเข้า เล่นเบา ๆ ลดไซซ์ และห้ามไล่ถ้าราคาเริ่มหนีโซน"
+    return "หมายเหตุค่าขนม: ตัวนี้ยังไม่ใช่สัญญาณหลัก แต่ราคาอยู่ใกล้โซนขาย/ลดพอร์ต ใช้เป็นจุดระวัง ไม่ใช่จุดใส่สุด"
 
 
 def _is_finite_number(value) -> bool:
@@ -102,12 +112,48 @@ def _score_signal(summary: dict) -> float:
     return round(max(0, min(100, score)), 1)
 
 
+def _trade_window(summary: dict) -> dict:
+    setup = summary["trade_setup"]
+    price = float(summary["price"])
+    entry = float(setup["entry"])
+    target = float(setup["target"])
+    direction = setup["direction"]
+    entry_distance_pct = abs(price - entry) / entry * 100 if entry else 100.0
+
+    if direction == "long":
+        target_room_pct = (target - price) / price * 100 if price else -100.0
+    else:
+        target_room_pct = (price - target) / price * 100 if price else -100.0
+
+    return {
+        "entry_distance_pct": entry_distance_pct,
+        "target_room_pct": target_room_pct,
+    }
+
+
+def _is_trade_ready(
+    summary: dict,
+    max_entry_distance_pct: float,
+    min_target_room_pct: float,
+) -> bool:
+    if not _has_valid_trade_numbers(summary):
+        return False
+
+    window = _trade_window(summary)
+    return (
+        window["entry_distance_pct"] <= max_entry_distance_pct
+        and window["target_room_pct"] >= min_target_room_pct
+    )
+
+
 def _is_actionable(summary: dict, score: float) -> bool:
     setup = summary["trade_setup"]
     market = summary.get("market")
-    min_score = 60.0 if market == "th" else settings.signal_min_score
-    min_risk_reward = 1.0 if market == "th" else settings.signal_min_risk_reward
-    min_volume_ratio = 0.8 if market == "th" else 1.0
+    min_score = 60.0 if market == "th" else (62.0 if market == "gold" else settings.signal_min_score)
+    min_risk_reward = 1.0 if market == "th" else (1.1 if market == "gold" else settings.signal_min_risk_reward)
+    min_volume_ratio = 0.8 if market == "th" else (0.0 if market == "gold" else 1.0)
+    max_entry_distance_pct = 0.35 if market == "gold" else settings.signal_max_entry_distance_pct
+    min_target_room_pct = 0.2 if market == "gold" else settings.signal_min_target_room_pct
 
     return (
         _has_valid_trade_numbers(summary)
@@ -115,6 +161,11 @@ def _is_actionable(summary: dict, score: float) -> bool:
         and setup["risk_reward"] >= min_risk_reward
         and summary["volume_ratio"] >= min_volume_ratio
         and setup["direction"] in ("long", "short")
+        and _is_trade_ready(
+            summary,
+            max_entry_distance_pct,
+            min_target_room_pct,
+        )
     )
 
 
@@ -126,27 +177,28 @@ def _is_snack_trade(summary: dict, score: float) -> bool:
     market = summary.get("market")
     min_score = min(settings.snack_trade_min_score, 55.0) if market == "th" else settings.snack_trade_min_score
     min_risk_reward = min(settings.snack_trade_min_risk_reward, 0.8) if market == "th" else settings.snack_trade_min_risk_reward
-    price = float(summary["price"])
-    entry = float(setup["entry"])
-    target = float(setup["target"])
-    entry_distance_pct = abs(price - entry) / entry * 100 if entry else 100
-    if setup["direction"] == "long":
-        target_room_pct = (target - price) / price * 100 if price else -100
-    else:
-        target_room_pct = (price - target) / price * 100 if price else -100
+    max_entry_distance_pct = 0.25 if market == "gold" else min(
+        settings.snack_trade_max_entry_distance_pct,
+        settings.signal_max_entry_distance_pct,
+    )
+    min_target_room_pct = 0.2 if market == "gold" else settings.snack_trade_min_target_room_pct
 
     return (
         score >= min_score
         and setup["risk_reward"] >= min_risk_reward
-        and summary["volume_ratio"] >= settings.snack_trade_min_volume_ratio
-        and entry_distance_pct <= settings.snack_trade_max_entry_distance_pct
-        and target_room_pct >= settings.snack_trade_min_target_room_pct
+        and summary["volume_ratio"] >= (0.0 if market == "gold" else settings.snack_trade_min_volume_ratio)
         and setup["direction"] in ("long", "short")
+        and _is_trade_ready(
+            summary,
+            max_entry_distance_pct,
+            min_target_room_pct,
+        )
     )
 
 
 def _build_signal(summary: dict, market: str, score: float, is_snack_trade: bool = False) -> dict:
     setup = summary["trade_setup"]
+    window = _trade_window(summary)
     signal = {
         "symbol": summary["symbol"],
         "name": summary["name"],
@@ -162,6 +214,8 @@ def _build_signal(summary: dict, market: str, score: float, is_snack_trade: bool
         "stop_loss": float(setup["stop_loss"]),
         "risk_reward": float(setup["risk_reward"]),
         "probability_pct": float(setup["probability_pct"]),
+        "entry_distance_pct": round(window["entry_distance_pct"], 2),
+        "target_room_pct": round(window["target_room_pct"], 2),
         "reasons": _signal_reasons(summary),
         "created_at": int(time.time()),
         "is_snack_trade": is_snack_trade,
@@ -191,7 +245,8 @@ def build_trade_signals(market: str = "us") -> list[dict]:
 def should_send_signal(signal: dict) -> bool:
     signal_type = "snack" if signal.get("is_snack_trade") else "main"
     key = f"signal:last_sent:{signal['symbol']}:{signal['direction']}:{signal_type}"
-    return _cache.get(key, settings.signal_cooldown_minutes * 60) is None
+    ttl_seconds = settings.signal_dedupe_ttl_hours * 60 * 60
+    return _cache.get(key, ttl_seconds) is None
 
 
 def mark_signal_sent(signal: dict) -> None:
@@ -204,10 +259,12 @@ def format_signal_message(signal: dict) -> str:
     reasons = "\n".join(f"- {html.escape(reason)}" for reason in signal["reasons"])
     snack_suffix = " (ค่าขนม)" if signal.get("is_snack_trade") else ""
     action_note = _snack_trade_note(signal["direction"]) if signal.get("is_snack_trade") else _action_note(signal["direction"])
+    market_label = _market_label(signal.get("market", ""))
 
     return "\n".join([
         f"<b>{html.escape(signal['signal'])}</b>",
         f"<b>{html.escape(signal['symbol'])}</b>{snack_suffix} - {html.escape(signal['name'])}",
+        f"ตลาด: {html.escape(market_label)}",
         f"คะแนน: <b>{signal['score']:.1f}</b> | โอกาส: {signal['probability_pct']:.1f}%",
         html.escape(action_note),
         "",
@@ -215,6 +272,7 @@ def format_signal_message(signal: dict) -> str:
         f"{_entry_label(signal['direction'])}: <b>{signal['entry']:.2f}</b>",
         f"{_target_label(signal['direction'])}: <b>{signal['target']:.2f}</b>",
         f"{_stop_label(signal['direction'])}: <b>{signal['stop_loss']:.2f}</b>",
+        f"ห่างจากจุดเข้า: {signal['entry_distance_pct']:.2f}% | ระยะถึงเป้า: {signal['target_room_pct']:.2f}%",
         f"Risk/Reward: {signal['risk_reward']:.2f}",
         "",
         "เหตุผล:",

@@ -71,12 +71,19 @@ MARKET_WATCHLISTS: dict[str, list[str]] = {
         "000858.SZ",  # Wuliangye
         "600309.SS",  # Wanhua Chemical
     ],
+    "gold": [
+        "XAUUSD=X",  # Gold spot quoted in USD
+        "GC=F",  # COMEX gold futures
+        "GLD",  # SPDR Gold Shares ETF
+        "IAU",  # iShares Gold Trust
+    ],
 }
 
 MARKET_THRESHOLDS = {
     "us": {"min_change_pct": 1.2, "min_vol_ratio": 1.1},
     "th": {"min_change_pct": 0.8, "min_vol_ratio": 1.0},
     "cn": {"min_change_pct": 0.8, "min_vol_ratio": 1.0},
+    "gold": {"min_change_pct": 0.15, "min_vol_ratio": 0.0},
 }
 
 TOP_N = 12
@@ -151,7 +158,7 @@ def _build_stock_summary(symbol: str, market: str) -> dict | None:
     thresholds = MARKET_THRESHOLDS.get(market, MARKET_THRESHOLDS["us"])
     quote = get_quote(symbol)
     avg_vol = quote.get("avg_volume", 1) or 1
-    volume_ratio = quote["volume"] / avg_vol
+    volume_ratio = 1.0 if market == "gold" and quote["volume"] <= 0 else quote["volume"] / avg_vol
 
     if (
         abs(quote["change_pct"]) < thresholds["min_change_pct"]
@@ -167,7 +174,10 @@ def _build_stock_summary(symbol: str, market: str) -> dict | None:
         news, news_sentiment, news_score = get_news_with_sentiment(symbol)
     else:
         news, news_sentiment, news_score = [], "neutral", 50.0
-    setup = calculate_trade_setup(ta, quote, news_score, news_sentiment)
+    setup_quote = quote
+    if market == "gold" and quote["volume"] <= 0:
+        setup_quote = {**quote, "volume": 1, "avg_volume": 1}
+    setup = calculate_trade_setup(ta, setup_quote, news_score, news_sentiment)
 
     trend = ta.get("trend", "neutral")
     if news_sentiment == "bullish" and trend in ("bullish", "neutral"):
