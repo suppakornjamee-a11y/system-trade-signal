@@ -3,7 +3,7 @@ import logging
 
 from .. import cache as _cache
 from ..config import settings
-from .stock_service import get_quote
+from .stock_service import get_quote, get_usd_thb_rate
 from .technical_analysis import analyze
 from .news_service import get_news_with_sentiment
 from .probability_engine import calculate_trade_setup
@@ -167,6 +167,25 @@ def _interest_score(summary: dict) -> float:
     )
 
 
+def _convert_crypto_summary_to_thb(summary: dict) -> dict:
+    rate = get_usd_thb_rate()
+    setup = summary["trade_setup"]
+    converted_setup = {
+        **setup,
+        "entry": round(setup["entry"] * rate, 2),
+        "target": round(setup["target"] * rate, 2),
+        "stop_loss": round(setup["stop_loss"] * rate, 2),
+    }
+    return {
+        **summary,
+        "price": round(summary["price"] * rate, 2),
+        "change": round(summary["change"] * rate, 2),
+        "trade_setup": converted_setup,
+        "currency": "THB",
+        "fx_rate": round(rate, 4),
+    }
+
+
 def _build_stock_summary(symbol: str, market: str) -> dict | None:
     thresholds = MARKET_THRESHOLDS.get(market, MARKET_THRESHOLDS["us"])
     quote = get_quote(symbol)
@@ -216,6 +235,8 @@ def _build_stock_summary(symbol: str, market: str) -> dict | None:
         "trade_setup": setup,
         "market": market,
     }
+    if market == "crypto":
+        summary = _convert_crypto_summary_to_thb(summary)
     summary["momentum_rank"] = _momentum_rank(summary)
     return summary
 

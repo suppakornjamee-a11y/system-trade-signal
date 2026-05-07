@@ -15,6 +15,20 @@ def _ticker(symbol: str) -> yf.Ticker:
     return yf.Ticker(symbol)
 
 
+def get_usd_thb_rate() -> float:
+    cached = _cache.get("fx:usd_thb", 300)
+    if cached:
+        return float(cached)
+
+    hist = _ticker("THB=X").history(period="5d", interval="1d", timeout=8)
+    if hist.empty:
+        raise ValueError("No USD/THB FX data")
+
+    rate = float(hist["Close"].iloc[-1])
+    _cache.set("fx:usd_thb", rate)
+    return rate
+
+
 def get_quote(symbol: str) -> dict:
     cached = _cache.get(f"quote:{symbol}", settings.cache_ttl_seconds)
     if cached:

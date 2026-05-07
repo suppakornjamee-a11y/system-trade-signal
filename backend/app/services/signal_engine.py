@@ -239,10 +239,18 @@ def _build_signal(summary: dict, market: str, score: float, is_snack_trade: bool
         "reasons": _signal_reasons(summary),
         "created_at": int(time.time()),
         "is_snack_trade": is_snack_trade,
+        "currency": summary.get("currency", "USD"),
+        "fx_rate": summary.get("fx_rate"),
     }
     if is_snack_trade:
         signal["reasons"] = ["ค่าขนม: เป็นตัวสำรองในวันที่ไม่มีสัญญาณหลัก"] + signal["reasons"]
     return signal
+
+
+def _format_price(value: float, currency: str) -> str:
+    if currency == "THB":
+        return f"{value:,.2f} THB"
+    return f"{value:,.2f}"
 
 
 def build_trade_signals(market: str = "us") -> list[dict]:
@@ -280,6 +288,7 @@ def format_signal_message(signal: dict) -> str:
     snack_suffix = " (ค่าขนม)" if signal.get("is_snack_trade") else ""
     action_note = _snack_trade_note(signal["direction"]) if signal.get("is_snack_trade") else _action_note(signal["direction"])
     market_label = _market_label(signal.get("market", ""))
+    currency = signal.get("currency", "USD")
 
     return "\n".join([
         f"<b>{html.escape(signal['signal'])}</b>",
@@ -288,10 +297,10 @@ def format_signal_message(signal: dict) -> str:
         f"คะแนน: <b>{signal['score']:.1f}</b> | โอกาส: {signal['probability_pct']:.1f}%",
         html.escape(action_note),
         "",
-        f"ราคาปัจจุบัน: {signal['price']:.2f} ({signal['change_pct']:+.2f}%)",
-        f"{_entry_label(signal['direction'])}: <b>{signal['entry']:.2f}</b>",
-        f"{_target_label(signal['direction'])}: <b>{signal['target']:.2f}</b>",
-        f"{_stop_label(signal['direction'])}: <b>{signal['stop_loss']:.2f}</b>",
+        f"ราคาปัจจุบัน: {_format_price(signal['price'], currency)} ({signal['change_pct']:+.2f}%)",
+        f"{_entry_label(signal['direction'])}: <b>{_format_price(signal['entry'], currency)}</b>",
+        f"{_target_label(signal['direction'])}: <b>{_format_price(signal['target'], currency)}</b>",
+        f"{_stop_label(signal['direction'])}: <b>{_format_price(signal['stop_loss'], currency)}</b>",
         f"ห่างจากจุดเข้า: {signal['entry_distance_pct']:.2f}% | ระยะถึงเป้า: {signal['target_room_pct']:.2f}%",
         f"Risk/Reward: {signal['risk_reward']:.2f}",
         "",
