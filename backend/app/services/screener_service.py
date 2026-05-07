@@ -77,6 +77,18 @@ MARKET_WATCHLISTS: dict[str, list[str]] = {
         "GLD",  # SPDR Gold Shares ETF
         "IAU",  # iShares Gold Trust
     ],
+    "crypto": [
+        "BTC-USD",  # Bitcoin
+        "ETH-USD",  # Ethereum
+        "SOL-USD",  # Solana
+        "BNB-USD",  # BNB
+        "XRP-USD",  # XRP
+        "ADA-USD",  # Cardano
+        "DOGE-USD",  # Dogecoin
+        "AVAX-USD",  # Avalanche
+        "LINK-USD",  # Chainlink
+        "LTC-USD",  # Litecoin
+    ],
 }
 
 MARKET_THRESHOLDS = {
@@ -84,6 +96,7 @@ MARKET_THRESHOLDS = {
     "th": {"min_change_pct": 0.8, "min_vol_ratio": 1.0},
     "cn": {"min_change_pct": 0.8, "min_vol_ratio": 1.0},
     "gold": {"min_change_pct": 0.15, "min_vol_ratio": 0.0},
+    "crypto": {"min_change_pct": 0.8, "min_vol_ratio": 0.0},
 }
 
 TOP_N = 12

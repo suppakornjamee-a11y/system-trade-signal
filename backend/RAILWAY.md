@@ -35,7 +35,7 @@ SIGNAL_MIN_SCORE=70
 SIGNAL_MIN_RISK_REWARD=1.2
 SIGNAL_MAX_ENTRY_DISTANCE_PCT=2
 SIGNAL_MIN_TARGET_ROOM_PCT=1
-SIGNAL_MARKETS=us,th,cn,gold
+SIGNAL_MARKETS=us,th,cn,gold,crypto
 ```
 
 ## Telegram setup
@@ -50,7 +50,9 @@ SIGNAL_MARKETS=us,th,cn,gold
 
 - `GET /health`
 - `GET /api/signals?market=us`
+- `GET /api/signals?market=crypto`
 - `POST /api/signals/scan`
 - `GET /api/screener/today?market=us`
+- `GET /api/screener/today?market=crypto`
 
 The background scanner starts only when `SIGNAL_NOTIFICATIONS_ENABLED=true`.

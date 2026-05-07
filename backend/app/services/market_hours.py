@@ -19,6 +19,10 @@ MARKET_SESSIONS = {
         "timezone": "America/New_York",
         "sessions": (),
     },
+    "crypto": {
+        "timezone": "UTC",
+        "sessions": (),
+    },
 }
 
 
@@ -28,6 +32,8 @@ def is_market_open(market: str, now: datetime | None = None) -> bool:
         return True
 
     local_now = (now or datetime.now(ZoneInfo("UTC"))).astimezone(ZoneInfo(schedule["timezone"]))
+    if market.lower() == "crypto":
+        return True
     if market.lower() == "gold":
         weekday = local_now.weekday()
         current_time = local_now.time()

@@ -27,7 +27,7 @@ class Settings(BaseSettings):
     signal_min_risk_reward: float = 1.2
     signal_max_entry_distance_pct: float = 2.0
     signal_min_target_room_pct: float = 1.0
-    signal_markets: str = "us,th,cn,gold"
+    signal_markets: str = "us,th,cn,gold,crypto"
     snack_trade_enabled: bool = True
     snack_trade_min_score: float = 58.0
     snack_trade_min_risk_reward: float = 1.0

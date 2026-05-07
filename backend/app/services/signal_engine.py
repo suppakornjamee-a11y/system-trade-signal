@@ -17,6 +17,7 @@ def _market_label(market: str) -> str:
         "th": "หุ้นไทย",
         "cn": "หุ้นจีน/HK",
         "gold": "ทองคำ",
+        "crypto": "Crypto",
     }
     return labels.get(market, market.upper())
 
@@ -149,11 +150,23 @@ def _is_trade_ready(
 def _is_actionable(summary: dict, score: float) -> bool:
     setup = summary["trade_setup"]
     market = summary.get("market")
-    min_score = 60.0 if market == "th" else (62.0 if market == "gold" else settings.signal_min_score)
-    min_risk_reward = 1.0 if market == "th" else (1.1 if market == "gold" else settings.signal_min_risk_reward)
-    min_volume_ratio = 0.8 if market == "th" else (0.0 if market == "gold" else 1.0)
-    max_entry_distance_pct = 0.35 if market == "gold" else settings.signal_max_entry_distance_pct
-    min_target_room_pct = 0.2 if market == "gold" else settings.signal_min_target_room_pct
+    min_score = (
+        60.0 if market == "th"
+        else (62.0 if market in ("gold", "crypto") else settings.signal_min_score)
+    )
+    min_risk_reward = (
+        1.0 if market in ("th", "crypto")
+        else (1.1 if market == "gold" else settings.signal_min_risk_reward)
+    )
+    min_volume_ratio = 0.8 if market == "th" else (0.0 if market in ("gold", "crypto") else 1.0)
+    max_entry_distance_pct = (
+        0.35 if market == "gold"
+        else (1.0 if market == "crypto" else settings.signal_max_entry_distance_pct)
+    )
+    min_target_room_pct = (
+        0.2 if market == "gold"
+        else (0.5 if market == "crypto" else settings.signal_min_target_room_pct)
+    )
 
     return (
         _has_valid_trade_numbers(summary)
@@ -176,17 +189,24 @@ def _is_snack_trade(summary: dict, score: float) -> bool:
 
     market = summary.get("market")
     min_score = min(settings.snack_trade_min_score, 55.0) if market == "th" else settings.snack_trade_min_score
-    min_risk_reward = min(settings.snack_trade_min_risk_reward, 0.8) if market == "th" else settings.snack_trade_min_risk_reward
-    max_entry_distance_pct = 0.25 if market == "gold" else min(
-        settings.snack_trade_max_entry_distance_pct,
-        settings.signal_max_entry_distance_pct,
+    min_risk_reward = (
+        min(settings.snack_trade_min_risk_reward, 0.8)
+        if market == "th"
+        else (0.8 if market == "crypto" else settings.snack_trade_min_risk_reward)
     )
-    min_target_room_pct = 0.2 if market == "gold" else settings.snack_trade_min_target_room_pct
+    max_entry_distance_pct = (
+        0.25 if market == "gold"
+        else (
+            0.75 if market == "crypto"
+            else min(settings.snack_trade_max_entry_distance_pct, settings.signal_max_entry_distance_pct)
+        )
+    )
+    min_target_room_pct = 0.2 if market == "gold" else (0.5 if market == "crypto" else settings.snack_trade_min_target_room_pct)
 
     return (
         score >= min_score
         and setup["risk_reward"] >= min_risk_reward
-        and summary["volume_ratio"] >= (0.0 if market == "gold" else settings.snack_trade_min_volume_ratio)
+        and summary["volume_ratio"] >= (0.0 if market in ("gold", "crypto") else settings.snack_trade_min_volume_ratio)
         and setup["direction"] in ("long", "short")
         and _is_trade_ready(
             summary,
