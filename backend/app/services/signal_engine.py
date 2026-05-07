@@ -161,7 +161,7 @@ def _is_actionable(summary: dict, score: float) -> bool:
     min_volume_ratio = 0.8 if market == "th" else (0.0 if market in ("gold", "crypto") else 1.0)
     max_entry_distance_pct = (
         0.35 if market == "gold"
-        else (1.0 if market == "crypto" else settings.signal_max_entry_distance_pct)
+        else (3.0 if market == "crypto" else settings.signal_max_entry_distance_pct)
     )
     min_target_room_pct = (
         0.2 if market == "gold"
@@ -197,7 +197,7 @@ def _is_snack_trade(summary: dict, score: float) -> bool:
     max_entry_distance_pct = (
         0.25 if market == "gold"
         else (
-            0.75 if market == "crypto"
+            2.0 if market == "crypto"
             else min(settings.snack_trade_max_entry_distance_pct, settings.signal_max_entry_distance_pct)
         )
     )
