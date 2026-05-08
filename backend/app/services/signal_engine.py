@@ -4,6 +4,7 @@ import time
 
 from .. import cache as _cache
 from ..config import settings
+from .stock_service import get_history
 from .screener_service import get_screener_results
 
 
@@ -38,6 +39,12 @@ def _action_note(direction: str) -> str:
     if direction == "long":
         return "แผนตอนนี้: เข้า Long ได้เฉพาะเมื่อราคายังอยู่ในโซนเข้า ถ้าราคาหนีโซนแล้วให้ข้าม ไม่ไล่ซื้อ"
     return "แผนตอนนี้: ใช้เป็นจุด Short/ลดพอร์ตเฉพาะเมื่อราคายังอยู่ในโซนขาย ถ้าราคาหลุดโซนแล้วให้รอใหม่"
+
+
+def _gold_scalp_note(direction: str) -> str:
+    if direction == "long":
+        return "แผนทองเร็ว: เข้า Long ได้เฉพาะในโซนนี้ เน้นกินสั้น ถ้าหลุด stop หรือไม่ไปใน 2-3 แท่ง 5 นาทีให้ปิด/ลดทันที"
+    return "แผนทองเร็ว: เข้า Short ได้เฉพาะในโซนนี้ เน้นกินสั้น ถ้าทะลุ stop หรือไม่ลงใน 2-3 แท่ง 5 นาทีให้ปิด/ลดทันที"
 
 
 def _action_label(signal: dict) -> str:
@@ -84,6 +91,139 @@ def _signal_reasons(summary: dict) -> list[str]:
         reasons.append(f"แรงเหวี่ยง {summary['momentum_rank']}/5")
 
     return reasons or ["เข้าเงื่อนไขเทคนิคสำหรับเล่นสั้น"]
+
+
+def _gold_scalp_signal() -> dict | None:
+    if not settings.gold_scalp_enabled:
+        return None
+
+    symbol = ""
+    name = "Gold Spot"
+    df = None
+    for candidate, candidate_name in (("GC=F", "Gold Futures"),):
+        try:
+            candidate_df = get_history(candidate, period="1d", interval="5m")
+        except Exception:
+            continue
+        if not candidate_df.empty:
+            symbol = candidate
+            name = candidate_name
+            df = candidate_df
+            break
+
+    if df is None:
+        return None
+
+    if df.empty or len(df) < 35:
+        return None
+
+    close = df["close"]
+    high = df["high"]
+    low = df["low"]
+    volume = df["volume"] if "volume" in df else None
+
+    ema9 = close.ewm(span=9, adjust=False).mean()
+    ema21 = close.ewm(span=21, adjust=False).mean()
+    ema50 = close.ewm(span=50, adjust=False).mean()
+
+    delta = close.diff()
+    gain = delta.clip(lower=0).rolling(14).mean()
+    loss = (-delta.clip(upper=0)).rolling(14).mean()
+    rs = gain / loss.replace(0, math.nan)
+    rsi = 100 - (100 / (1 + rs))
+
+    prev_close = close.shift(1)
+    true_range = max(
+        float((high.iloc[-14:] - low.iloc[-14:]).mean()),
+        float((high.iloc[-14:] - prev_close.iloc[-14:]).abs().mean()),
+        float((low.iloc[-14:] - prev_close.iloc[-14:]).abs().mean()),
+    )
+    atr = true_range if math.isfinite(true_range) and true_range > 0 else float(close.iloc[-1]) * 0.001
+
+    price = float(close.iloc[-1])
+    previous_price = float(close.iloc[-2])
+    change = price - previous_price
+    change_pct = (change / previous_price) * 100 if previous_price else 0.0
+    last_rsi = float(rsi.iloc[-1]) if math.isfinite(float(rsi.iloc[-1])) else 50.0
+    last_ema9 = float(ema9.iloc[-1])
+    last_ema21 = float(ema21.iloc[-1])
+    last_ema50 = float(ema50.iloc[-1])
+    prior_ema9 = float(ema9.iloc[-2])
+    prior_ema21 = float(ema21.iloc[-2])
+    momentum = price - float(close.iloc[-4])
+
+    long_setup = (
+        last_ema9 > last_ema21 >= last_ema50
+        and price >= last_ema9
+        and momentum > 0
+        and 40 <= last_rsi <= 80
+        and price <= last_ema9 + atr * 0.8
+    )
+    short_setup = (
+        last_ema9 < last_ema21 <= last_ema50
+        and price <= last_ema9
+        and momentum < 0
+        and 20 <= last_rsi <= 60
+        and price >= last_ema9 - atr * 0.8
+    )
+    fresh_cross = abs((last_ema9 - last_ema21) - (prior_ema9 - prior_ema21)) > atr * 0.03
+
+    if not long_setup and not short_setup:
+        return None
+
+    direction = "long" if long_setup else "short"
+    risk_usd = min(max(atr * 0.75, 1.5), settings.gold_scalp_max_stop_usd)
+    reward_usd = max(risk_usd * 1.2, settings.gold_scalp_min_target_usd)
+    entry_band = min(max(atr * 0.18, 0.7), 2.0)
+
+    if direction == "long":
+        stop_loss = price - risk_usd
+        target = price + reward_usd
+    else:
+        stop_loss = price + risk_usd
+        target = price - reward_usd
+
+    trend_score = 22 if fresh_cross else 14
+    rsi_score = 18 if (direction == "long" and last_rsi < 66) or (direction == "short" and last_rsi > 34) else 10
+    momentum_score = min(abs(momentum) / max(atr, 0.01) * 18, 18)
+    score = round(min(88.0, 42 + trend_score + rsi_score + momentum_score), 1)
+    if score < settings.gold_scalp_min_score:
+        return None
+
+    volume_value = int(volume.iloc[-1]) if volume is not None and math.isfinite(float(volume.iloc[-1])) else 0
+
+    return {
+        "symbol": symbol,
+        "name": name,
+        "market": "gold",
+        "direction": direction,
+        "signal": "สัญญาณทองเร็ว",
+        "score": score,
+        "price": round(price, 2),
+        "change_pct": round(change_pct, 2),
+        "volume_ratio": 1.0,
+        "entry": round(price, 2),
+        "entry_zone_low": round(price - entry_band, 2),
+        "entry_zone_high": round(price + entry_band, 2),
+        "target": round(target, 2),
+        "stop_loss": round(stop_loss, 2),
+        "risk_reward": round(reward_usd / risk_usd, 2) if risk_usd else 0.0,
+        "probability_pct": score,
+        "entry_distance_pct": 0.0,
+        "target_room_pct": round(abs(target - price) / price * 100, 2) if price else 0.0,
+        "reasons": [
+            f"กราฟ 5 นาที EMA9 {'อยู่เหนือ' if direction == 'long' else 'อยู่ใต้'} EMA21",
+            f"RSI {last_rsi:.1f} ยังพอมีพื้นที่สำหรับ scalp",
+            f"ATR 5m ประมาณ {atr:.2f} ใช้ตั้ง stop/target สั้น",
+        ],
+        "created_at": int(time.time()),
+        "is_snack_trade": False,
+        "currency": "USD",
+        "action": "ready",
+        "style": "gold_scalp",
+        "timeframe": "5m",
+        "volume": volume_value,
+    }
 
 
 def _snack_trade_note(direction: str) -> str:
@@ -219,11 +359,15 @@ def _is_snack_trade(summary: dict, score: float) -> bool:
         return False
 
     market = summary.get("market")
-    min_score = min(settings.snack_trade_min_score, 55.0) if market == "th" else settings.snack_trade_min_score
+    min_score = (
+        min(settings.snack_trade_min_score, 55.0)
+        if market in ("th", "us")
+        else settings.snack_trade_min_score
+    )
     min_risk_reward = (
         min(settings.snack_trade_min_risk_reward, 0.8)
         if market == "th"
-        else (0.8 if market == "crypto" else settings.snack_trade_min_risk_reward)
+        else (0.9 if market == "us" else (0.8 if market == "crypto" else settings.snack_trade_min_risk_reward))
     )
     max_entry_distance_pct = (
         0.25 if market == "gold"
@@ -232,12 +376,19 @@ def _is_snack_trade(summary: dict, score: float) -> bool:
             else min(settings.snack_trade_max_entry_distance_pct, settings.signal_max_entry_distance_pct)
         )
     )
-    min_target_room_pct = 0.2 if market == "gold" else (0.5 if market == "crypto" else settings.snack_trade_min_target_room_pct)
+    min_target_room_pct = (
+        0.2 if market == "gold"
+        else (0.5 if market in ("crypto", "us") else settings.snack_trade_min_target_room_pct)
+    )
+    min_volume_ratio = (
+        0.0 if market in ("gold", "crypto")
+        else (0.3 if market == "us" else settings.snack_trade_min_volume_ratio)
+    )
 
     return (
         score >= min_score
         and setup["risk_reward"] >= min_risk_reward
-        and summary["volume_ratio"] >= (0.0 if market in ("gold", "crypto") else settings.snack_trade_min_volume_ratio)
+        and summary["volume_ratio"] >= min_volume_ratio
         and setup["direction"] in ("long", "short")
         and _is_trade_ready(
             summary,
@@ -288,6 +439,10 @@ def _format_price(value: float, currency: str) -> str:
 
 
 def build_trade_signals(market: str = "us") -> list[dict]:
+    if market == "gold":
+        signal = _gold_scalp_signal()
+        return [signal] if signal else []
+
     signals = []
     snack_candidates = []
     for summary in get_screener_results(market=market):
@@ -305,14 +460,18 @@ def build_trade_signals(market: str = "us") -> list[dict]:
 
 
 def should_send_signal(signal: dict) -> bool:
-    signal_type = "snack" if signal.get("is_snack_trade") else "main"
+    signal_type = signal.get("style") or ("snack" if signal.get("is_snack_trade") else "main")
     key = f"signal:last_sent:{signal['symbol']}:{signal['direction']}:{signal_type}"
-    ttl_seconds = settings.signal_dedupe_ttl_hours * 60 * 60
+    ttl_seconds = (
+        settings.gold_scalp_dedupe_ttl_minutes * 60
+        if signal_type == "gold_scalp"
+        else settings.signal_dedupe_ttl_hours * 60 * 60
+    )
     return _cache.get(key, ttl_seconds) is None
 
 
 def mark_signal_sent(signal: dict) -> None:
-    signal_type = "snack" if signal.get("is_snack_trade") else "main"
+    signal_type = signal.get("style") or ("snack" if signal.get("is_snack_trade") else "main")
     key = f"signal:last_sent:{signal['symbol']}:{signal['direction']}:{signal_type}"
     _cache.set(key, int(time.time()))
 
@@ -320,16 +479,21 @@ def mark_signal_sent(signal: dict) -> None:
 def format_signal_message(signal: dict) -> str:
     reasons = "\n".join(f"- {html.escape(reason)}" for reason in signal["reasons"])
     snack_suffix = " (ค่าขนม)" if signal.get("is_snack_trade") else ""
-    action_note = _snack_trade_note(signal["direction"]) if signal.get("is_snack_trade") else _action_note(signal["direction"])
+    if signal.get("style") == "gold_scalp":
+        action_note = _gold_scalp_note(signal["direction"])
+    else:
+        action_note = _snack_trade_note(signal["direction"]) if signal.get("is_snack_trade") else _action_note(signal["direction"])
     market_label = _market_label(signal.get("market", ""))
     currency = signal.get("currency", "USD")
     action_label = _action_label(signal)
-    direction = "LONG" if signal["direction"] == "long" else "SHORT/REDUCE"
+    direction = "LONG" if signal["direction"] == "long" else ("SHORT" if signal.get("style") == "gold_scalp" else "SHORT/REDUCE")
+    title = "ทองเร็ว" if signal.get("style") == "gold_scalp" else action_label
 
     return "\n".join([
-        f"<b>{html.escape(action_label)}: {html.escape(direction)} {html.escape(signal['symbol'])}</b>{snack_suffix}",
+        f"<b>{html.escape(title)}: {html.escape(direction)} {html.escape(signal['symbol'])}</b>{snack_suffix}",
         html.escape(signal["name"]),
         f"ตลาด: {html.escape(market_label)} | คะแนน: <b>{signal['score']:.1f}</b> | โอกาส: {signal['probability_pct']:.1f}%",
+        *([f"Timeframe: {html.escape(signal['timeframe'])} | ถือสั้นตามแท่ง 5 นาที"] if signal.get("style") == "gold_scalp" else []),
         "",
         html.escape(action_note),
         _execution_line(signal, currency),
