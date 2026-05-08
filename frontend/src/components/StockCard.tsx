@@ -5,7 +5,7 @@ import type { StockSummary } from "@/lib/types";
 import { MARKET_CURRENCY } from "@/lib/types";
 import type { Market } from "@/lib/types";
 import { useLang } from "@/lib/context/LanguageContext";
-import { RankBadge } from "@/app/page";
+import RankBadge from "@/components/RankBadge";
 import { clsx } from "clsx";
 import { getLogoUrl, symbolColor, displaySymbol } from "@/lib/logos";
 
@@ -44,6 +44,29 @@ function fmtVol(n: number) {
   return String(n);
 }
 
+function actionCopy(action: string, lang: string) {
+  const th = lang === "th";
+  if (action === "ready") {
+    return {
+      label: th ? "เข้าได้ตอนนี้" : "Ready now",
+      note: th ? "ราคาอยู่ในโซนเข้าแล้ว" : "Price is inside the entry zone",
+      color: "text-bull border-bull/40 bg-bull/10",
+    };
+  }
+  if (action === "wait_bounce") {
+    return {
+      label: th ? "รอเด้ง" : "Wait bounce",
+      note: th ? "ยังไม่ใช่จุดขาย/ชอร์ตที่ดี" : "Not at a clean short zone yet",
+      color: "text-yellow-400 border-yellow-400/40 bg-yellow-400/10",
+    };
+  }
+  return {
+    label: th ? "รอย่อ" : "Wait pullback",
+    note: th ? "อย่าไล่ราคา รอเข้าใกล้โซน" : "Do not chase; wait near the zone",
+    color: "text-yellow-400 border-yellow-400/40 bg-yellow-400/10",
+  };
+}
+
 const SIGNAL_COLOR = {
   bullish: "text-bull border-bull/30",
   bearish: "text-bear border-bear/30",
@@ -57,10 +80,11 @@ const SIGNAL_BG = {
 };
 
 export default function StockCard({ stock }: { stock: StockSummary }) {
-  const { t } = useLang();
+  const { t, lang } = useLang();
   const { trade_setup: ts } = stock;
   const positive = stock.change >= 0;
   const cur = MARKET_CURRENCY[stock.market] ?? "$";
+  const action = actionCopy(ts.action, lang);
 
   const signalLabel =
     stock.signal === "bullish"
@@ -100,6 +124,16 @@ export default function StockCard({ stock }: { stock: StockSummary }) {
           )}>
             {signalLabel}
           </span>
+        </div>
+
+        <div className={clsx("mb-3 rounded border px-3 py-2", action.color)}>
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xs font-bold">{action.label}</span>
+            <span className="text-[11px] font-mono">
+              E {ts.entry_distance_pct.toFixed(2)}% | T {ts.target_room_pct.toFixed(2)}%
+            </span>
+          </div>
+          <div className="mt-0.5 text-[11px] opacity-80">{action.note}</div>
         </div>
 
         {/* Price */}

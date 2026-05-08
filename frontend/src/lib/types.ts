@@ -1,17 +1,22 @@
 export type Sentiment = "bullish" | "bearish" | "neutral";
 export type Direction = "long" | "short";
-export type Market = "us" | "th" | "cn";
+export type Market = "us" | "th" | "cn" | "gold" | "crypto";
+export type TradeAction = "ready" | "wait_pullback" | "wait_bounce";
 
 export const MARKET_CURRENCY: Record<Market, string> = {
   us: "$",
   th: "฿",
   cn: "HK$",
+  gold: "$",
+  crypto: "THB",
 };
 
 export const MARKET_INFO: Record<Market, { flag: string; labelTh: string; labelEn: string }> = {
   us: { flag: "🇺🇸", labelTh: "สหรัฐ", labelEn: "US" },
   th: { flag: "🇹🇭", labelTh: "ไทย", labelEn: "Thailand" },
   cn: { flag: "🇨🇳", labelTh: "จีน", labelEn: "China" },
+  gold: { flag: "XAU", labelTh: "Gold", labelEn: "Gold" },
+  crypto: { flag: "BTC", labelTh: "Crypto", labelEn: "Crypto" },
 };
 
 export interface NewsItem {
@@ -40,6 +45,8 @@ export interface TechnicalData {
 export interface TradeSetup {
   direction: Direction;
   entry: number;
+  entry_zone_low: number;
+  entry_zone_high: number;
   target: number;
   stop_loss: number;
   risk_reward: number;
@@ -47,6 +54,9 @@ export interface TradeSetup {
   tech_score: number;
   news_score: number;
   volume_score: number;
+  action: TradeAction;
+  entry_distance_pct: number;
+  target_room_pct: number;
 }
 
 export interface StockSummary {

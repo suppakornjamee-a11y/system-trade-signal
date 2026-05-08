@@ -36,8 +36,34 @@ def _stop_label(direction: str) -> str:
 
 def _action_note(direction: str) -> str:
     if direction == "long":
-        return "คำแนะนำ: ราคาตอนนี้อยู่ใกล้โซนเข้าแล้ว ใช้แผนนี้ได้ทันทีถ้ายืนยันด้วยแท่ง/วอลุ่มตามระบบ และห้ามไล่ถ้าราคาเริ่มหนีโซน"
-    return "คำแนะนำ: ราคาตอนนี้อยู่ใกล้โซนขาย/ลดพอร์ตแล้ว ใช้เป็นจุดระวังหรือจุดออกตามแผน"
+        return "แผนตอนนี้: เข้า Long ได้เฉพาะเมื่อราคายังอยู่ในโซนเข้า ถ้าราคาหนีโซนแล้วให้ข้าม ไม่ไล่ซื้อ"
+    return "แผนตอนนี้: ใช้เป็นจุด Short/ลดพอร์ตเฉพาะเมื่อราคายังอยู่ในโซนขาย ถ้าราคาหลุดโซนแล้วให้รอใหม่"
+
+
+def _action_label(signal: dict) -> str:
+    action = signal.get("action")
+    if action == "ready":
+        return "เข้าได้ตอนนี้"
+    if action == "wait_bounce":
+        return "รอเด้งเข้าโซน"
+    return "รอย่อเข้าโซน"
+
+
+def _execution_line(signal: dict, currency: str) -> str:
+    direction = signal["direction"]
+    entry_zone_low = signal.get("entry_zone_low", signal["entry"])
+    entry_zone_high = signal.get("entry_zone_high", signal["entry"])
+    if direction == "long":
+        return (
+            f"ซื้อในโซน <b>{_format_price(entry_zone_low, currency)} - "
+            f"{_format_price(entry_zone_high, currency)}</b>; "
+            f"หลุด {_format_price(signal['stop_loss'], currency)} ตัดทันที"
+        )
+    return (
+        f"Short/ลดพอร์ตในโซน <b>{_format_price(entry_zone_low, currency)} - "
+        f"{_format_price(entry_zone_high, currency)}</b>; "
+        f"ทะลุ {_format_price(signal['stop_loss'], currency)} ยกเลิกแผน"
+    )
 
 
 def _signal_reasons(summary: dict) -> list[str]:
@@ -84,6 +110,8 @@ def _has_valid_trade_numbers(summary: dict) -> bool:
             setup.get("entry"),
             setup.get("target"),
             setup.get("stop_loss"),
+            setup.get("entry_zone_low", setup.get("entry")),
+            setup.get("entry_zone_high", setup.get("entry")),
             setup.get("risk_reward"),
             setup.get("probability_pct"),
             setup.get("tech_score"),
@@ -141,7 +169,10 @@ def _is_trade_ready(
         return False
 
     window = _trade_window(summary)
+    setup = summary["trade_setup"]
     return (
+        setup.get("action", "ready") == "ready"
+        and
         window["entry_distance_pct"] <= max_entry_distance_pct
         and window["target_room_pct"] >= min_target_room_pct
     )
@@ -230,12 +261,15 @@ def _build_signal(summary: dict, market: str, score: float, is_snack_trade: bool
         "change_pct": float(summary["change_pct"]),
         "volume_ratio": float(summary["volume_ratio"]),
         "entry": float(setup["entry"]),
+        "entry_zone_low": float(setup.get("entry_zone_low", setup["entry"])),
+        "entry_zone_high": float(setup.get("entry_zone_high", setup["entry"])),
         "target": float(setup["target"]),
         "stop_loss": float(setup["stop_loss"]),
         "risk_reward": float(setup["risk_reward"]),
         "probability_pct": float(setup["probability_pct"]),
         "entry_distance_pct": round(window["entry_distance_pct"], 2),
         "target_room_pct": round(window["target_room_pct"], 2),
+        "action": setup.get("action", "ready"),
         "reasons": _signal_reasons(summary),
         "created_at": int(time.time()),
         "is_snack_trade": is_snack_trade,
@@ -289,20 +323,22 @@ def format_signal_message(signal: dict) -> str:
     action_note = _snack_trade_note(signal["direction"]) if signal.get("is_snack_trade") else _action_note(signal["direction"])
     market_label = _market_label(signal.get("market", ""))
     currency = signal.get("currency", "USD")
+    action_label = _action_label(signal)
+    direction = "LONG" if signal["direction"] == "long" else "SHORT/REDUCE"
 
     return "\n".join([
-        f"<b>{html.escape(signal['signal'])}</b>",
-        f"<b>{html.escape(signal['symbol'])}</b>{snack_suffix} - {html.escape(signal['name'])}",
-        f"ตลาด: {html.escape(market_label)}",
-        f"คะแนน: <b>{signal['score']:.1f}</b> | โอกาส: {signal['probability_pct']:.1f}%",
-        html.escape(action_note),
+        f"<b>{html.escape(action_label)}: {html.escape(direction)} {html.escape(signal['symbol'])}</b>{snack_suffix}",
+        html.escape(signal["name"]),
+        f"ตลาด: {html.escape(market_label)} | คะแนน: <b>{signal['score']:.1f}</b> | โอกาส: {signal['probability_pct']:.1f}%",
         "",
-        f"ราคาปัจจุบัน: {_format_price(signal['price'], currency)} ({signal['change_pct']:+.2f}%)",
-        f"{_entry_label(signal['direction'])}: <b>{_format_price(signal['entry'], currency)}</b>",
-        f"{_target_label(signal['direction'])}: <b>{_format_price(signal['target'], currency)}</b>",
+        html.escape(action_note),
+        _execution_line(signal, currency),
+        "",
+        f"ตอนนี้: {_format_price(signal['price'], currency)} ({signal['change_pct']:+.2f}%)",
+        f"{_entry_label(signal['direction'])}: <b>{_format_price(signal['entry'], currency)}</b> | ห่าง {signal['entry_distance_pct']:.2f}%",
+        f"{_target_label(signal['direction'])}: <b>{_format_price(signal['target'], currency)}</b> | เหลือ {signal['target_room_pct']:.2f}%",
         f"{_stop_label(signal['direction'])}: <b>{_format_price(signal['stop_loss'], currency)}</b>",
-        f"ห่างจากจุดเข้า: {signal['entry_distance_pct']:.2f}% | ระยะถึงเป้า: {signal['target_room_pct']:.2f}%",
-        f"Risk/Reward: {signal['risk_reward']:.2f}",
+        f"Risk/Reward: <b>{signal['risk_reward']:.2f}</b>",
         "",
         "เหตุผล:",
         reasons,

@@ -28,6 +28,8 @@ class TechnicalData(BaseModel):
 class TradeSetup(BaseModel):
     direction: str  # long | short
     entry: float
+    entry_zone_low: float
+    entry_zone_high: float
     target: float
     stop_loss: float
     risk_reward: float
@@ -35,6 +37,9 @@ class TradeSetup(BaseModel):
     tech_score: float
     news_score: float
     volume_score: float
+    action: str  # ready | wait_pullback | wait_bounce
+    entry_distance_pct: float
+    target_room_pct: float
 
 
 class StockSummary(BaseModel):

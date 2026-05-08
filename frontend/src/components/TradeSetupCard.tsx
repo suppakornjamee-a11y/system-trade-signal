@@ -16,6 +16,29 @@ function Row({ label, value, color }: { label: string; value: string; color?: st
   );
 }
 
+function actionCopy(action: string, lang: string) {
+  const th = lang === "th";
+  if (action === "ready") {
+    return {
+      label: th ? "พร้อมเทรด" : "Ready to trade",
+      note: th ? "ราคาปัจจุบันอยู่ใกล้จุดเข้า ใช้แผนนี้ได้ทันทีตามวินัยความเสี่ยง" : "Current price is close enough to the entry plan.",
+      color: "border-bull/40 bg-bull/10 text-bull",
+    };
+  }
+  if (action === "wait_bounce") {
+    return {
+      label: th ? "รอเด้งเข้าโซน" : "Wait for bounce",
+      note: th ? "ยังไม่ควรชอร์ต/ขายตอนนี้ รอราคาเด้งเข้าโซนก่อน" : "Wait for price to bounce into the short zone.",
+      color: "border-yellow-400/40 bg-yellow-400/10 text-yellow-400",
+    };
+  }
+  return {
+    label: th ? "รอย่อเข้าโซน" : "Wait for pullback",
+    note: th ? "ยังไม่ควรไล่ซื้อ รอราคาเข้าใกล้โซนก่อน" : "Avoid chasing; wait for price to pull back.",
+    color: "border-yellow-400/40 bg-yellow-400/10 text-yellow-400",
+  };
+}
+
 export default function TradeSetupCard({
   setup,
   technical,
@@ -25,8 +48,9 @@ export default function TradeSetupCard({
   technical: TechnicalData;
   currentPrice: number;
 }) {
-  const { t } = useLang();
+  const { t, lang } = useLang();
   const isLong = setup.direction === "long";
+  const action = actionCopy(setup.action, lang);
   const pnlAtTarget = isLong
     ? ((setup.target - setup.entry) / setup.entry) * 100
     : ((setup.entry - setup.target) / setup.entry) * 100;
@@ -54,10 +78,23 @@ export default function TradeSetupCard({
       </div>
 
       <div className="mb-4">
+        <div className={clsx("mb-3 rounded border px-3 py-2", action.color)}>
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-sm font-bold">{action.label}</span>
+            <span className="text-xs font-mono text-white">
+              {setup.entry_distance_pct.toFixed(2)}% from entry
+            </span>
+          </div>
+          <p className="mt-1 text-xs opacity-85">{action.note}</p>
+        </div>
         <Row label={t("setup.entry_price")} value={`$${fmt(setup.entry)}`} />
         <Row
+          label={lang === "th" ? "โซนเข้า" : "Entry Zone"}
+          value={`$${fmt(setup.entry_zone_low)} - $${fmt(setup.entry_zone_high)}`}
+        />
+        <Row
           label={t("setup.target_price")}
-          value={`$${fmt(setup.target)} (+${fmt(pnlAtTarget)}%)`}
+          value={`$${fmt(setup.target)} (+${fmt(pnlAtTarget)}%, room ${fmt(setup.target_room_pct)}%)`}
           color="text-bull"
         />
         <Row
