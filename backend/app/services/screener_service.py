@@ -1,8 +1,11 @@
 from concurrent.futures import ThreadPoolExecutor, TimeoutError, as_completed
+from datetime import datetime
 import logging
+from zoneinfo import ZoneInfo
 
 from .. import cache as _cache
 from ..config import settings
+from .market_hours import MARKET_SESSIONS
 from .stock_service import get_quote, get_usd_thb_rate
 from .technical_analysis import analyze
 from .news_service import get_news_with_sentiment
@@ -100,12 +103,44 @@ MARKET_THRESHOLDS = {
 }
 
 TOP_N = 12
-MAX_SCAN_WORKERS = 3
-MARKET_SCAN_TIMEOUT_SECONDS = 30
+MAX_SCAN_WORKERS = 6
+MARKET_SCAN_TIMEOUT_SECONDS = 75
 MAX_DIAGNOSTIC_ERRORS = 5
 
 logger = logging.getLogger(__name__)
 _LAST_SCAN_DIAGNOSTICS: dict[str, dict] = {}
+
+
+def _session_progress(market: str) -> float | None:
+    schedule = MARKET_SESSIONS.get(market)
+    if not schedule or not schedule["sessions"]:
+        return None
+
+    local_now = datetime.now(ZoneInfo("UTC")).astimezone(ZoneInfo(schedule["timezone"]))
+    current_time = local_now.time()
+    for start, end in schedule["sessions"]:
+        if start <= current_time <= end:
+            start_dt = local_now.replace(hour=start.hour, minute=start.minute, second=0, microsecond=0)
+            end_dt = local_now.replace(hour=end.hour, minute=end.minute, second=0, microsecond=0)
+            elapsed = (local_now - start_dt).total_seconds()
+            total = (end_dt - start_dt).total_seconds()
+            if total <= 0:
+                return None
+            return max(0.08, min(1.0, elapsed / total))
+    return None
+
+
+def _volume_ratio(market: str, volume: int, avg_volume: int) -> float:
+    if market == "gold" and volume <= 0:
+        return 1.0
+    if not avg_volume:
+        return 1.0
+
+    raw_ratio = volume / avg_volume
+    progress = _session_progress(market)
+    if progress:
+        return raw_ratio / progress
+    return raw_ratio
 
 
 def _momentum_rank(summary: dict) -> int:
@@ -190,7 +225,7 @@ def _build_stock_summary(symbol: str, market: str) -> dict | None:
     thresholds = MARKET_THRESHOLDS.get(market, MARKET_THRESHOLDS["us"])
     quote = get_quote(symbol)
     avg_vol = quote.get("avg_volume", 1) or 1
-    volume_ratio = 1.0 if market == "gold" and quote["volume"] <= 0 else quote["volume"] / avg_vol
+    volume_ratio = _volume_ratio(market, quote["volume"], avg_vol)
 
     if (
         abs(quote["change_pct"]) < thresholds["min_change_pct"]

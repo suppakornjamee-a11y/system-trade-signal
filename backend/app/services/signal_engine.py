@@ -360,7 +360,7 @@ def _is_snack_trade(summary: dict, score: float) -> bool:
 
     market = summary.get("market")
     min_score = (
-        min(settings.snack_trade_min_score, 55.0)
+        min(settings.snack_trade_min_score, 52.0)
         if market in ("th", "us")
         else settings.snack_trade_min_score
     )
