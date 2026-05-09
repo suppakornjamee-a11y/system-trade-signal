@@ -208,6 +208,8 @@ def _convert_crypto_summary_to_thb(summary: dict) -> dict:
     converted_setup = {
         **setup,
         "entry": round(setup["entry"] * rate, 2),
+        "entry_zone_low": round(setup.get("entry_zone_low", setup["entry"]) * rate, 2),
+        "entry_zone_high": round(setup.get("entry_zone_high", setup["entry"]) * rate, 2),
         "target": round(setup["target"] * rate, 2),
         "stop_loss": round(setup["stop_loss"] * rate, 2),
     }
