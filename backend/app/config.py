@@ -28,6 +28,11 @@ class Settings(BaseSettings):
     signal_max_entry_distance_pct: float = 2.0
     signal_min_target_room_pct: float = 1.0
     signal_markets: str = "us,th,cn,gold,crypto"
+    premarket_news_enabled: bool = False
+    premarket_news_markets: str = "us,th,cn"
+    premarket_news_minutes_before_open: int = 45
+    premarket_news_window_minutes: int = 30
+    premarket_news_dedupe_ttl_hours: int = 36
     snack_trade_enabled: bool = True
     snack_trade_min_score: float = 58.0
     snack_trade_min_risk_reward: float = 1.0

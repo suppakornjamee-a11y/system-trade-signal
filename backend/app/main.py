@@ -30,11 +30,11 @@ app.include_router(signals.router, prefix="/api/signals", tags=["signals"])
 
 @app.on_event("startup")
 async def start_signal_scheduler():
-    if settings.signal_notifications_enabled:
-        logger.info("Signal notification scheduler enabled")
+    if settings.signal_notifications_enabled or settings.premarket_news_enabled:
+        logger.info("Notification scheduler enabled")
         asyncio.create_task(run_signal_scheduler())
     else:
-        logger.info("Signal notification scheduler disabled")
+        logger.info("Notification scheduler disabled")
 
 
 @app.get("/health")
@@ -50,5 +50,11 @@ def health():
             "cooldown_minutes": settings.signal_cooldown_minutes,
             "min_score": settings.signal_min_score,
             "min_risk_reward": settings.signal_min_risk_reward,
+        },
+        "premarket_news": {
+            "enabled": settings.premarket_news_enabled,
+            "markets": settings.premarket_news_markets,
+            "minutes_before_open": settings.premarket_news_minutes_before_open,
+            "window_minutes": settings.premarket_news_window_minutes,
         },
     }

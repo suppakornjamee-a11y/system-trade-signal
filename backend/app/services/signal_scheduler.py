@@ -8,6 +8,11 @@ from .signal_engine import (
     mark_signal_sent,
     should_send_signal,
 )
+from .market_briefing import (
+    build_all_due_premarket_briefings,
+    format_premarket_message,
+    mark_premarket_briefing_sent,
+)
 from .market_hours import market_status
 from .screener_service import get_last_screener_diagnostics
 from .telegram_service import send_telegram_message
@@ -60,10 +65,42 @@ async def scan_and_notify() -> dict:
     return result
 
 
+async def scan_premarket_news_and_notify() -> dict:
+    sent = []
+    errors = []
+
+    try:
+        due_briefings = await asyncio.to_thread(build_all_due_premarket_briefings)
+    except Exception as exc:
+        logger.exception("Premarket briefing scan failed")
+        return {"sent": sent, "errors": [{"error": str(exc)}]}
+
+    for briefing, timing in due_briefings:
+        market = briefing["market"]
+        try:
+            await send_telegram_message(format_premarket_message(briefing))
+            mark_premarket_briefing_sent(market, timing.get("open_at"))
+            sent.append({
+                "market": market,
+                "bias": briefing["bias"],
+                "score": briefing["score"],
+                "open_at": timing.get("open_at"),
+            })
+        except Exception as exc:
+            errors.append({"market": market, "error": str(exc)})
+
+    result = {"sent": sent, "errors": errors}
+    logger.info("Premarket briefing scan finished: %s", result)
+    return result
+
+
 async def run_signal_scheduler() -> None:
     while True:
         try:
-            await scan_and_notify()
+            if settings.premarket_news_enabled:
+                await scan_premarket_news_and_notify()
+            if settings.signal_notifications_enabled:
+                await scan_and_notify()
         except Exception:
             logger.exception("Signal scheduler failed")
         await asyncio.sleep(settings.signal_poll_interval_seconds)
