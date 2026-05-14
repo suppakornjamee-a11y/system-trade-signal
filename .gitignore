@@ -15,6 +15,10 @@ __pycache__/
 .mypy_cache/
 .ruff_cache/
 backend/.cache/
+backend/data/
+*.sqlite
+*.sqlite3
+*.db
 
 node_modules/
 .next/

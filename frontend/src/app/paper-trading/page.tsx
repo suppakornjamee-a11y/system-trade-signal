@@ -4,7 +4,7 @@ import { useState } from "react";
 import useSWR from "swr";
 import { api } from "@/lib/api";
 import { useLang } from "@/lib/context/LanguageContext";
-import type { Market, PaperDailyPnL, PaperPosition, PaperTrade } from "@/lib/types";
+import type { Market, PaperDailyPnL, PaperPosition, PaperTrade, PaperTradingSummary } from "@/lib/types";
 
 const MARKETS: Market[] = ["us", "th", "cn", "gold", "crypto"];
 const MARKET_LABELS: Record<"en" | "th", Record<Market, string>> = {
@@ -44,10 +44,25 @@ const COPY = {
     target: "Target",
     entry: "Entry",
     recentOrders: "Recent Paper Orders",
-    recentOrdersSub: "Simulated entries generated from the current signal set",
+    recentOrdersSub: "Entry and exit logs stored in the paper ledger",
     noOrders: "No simulated orders today.",
     error: "Failed to load paper trading data. Make sure the backend is running.",
     disclaimer: "No live orders are sent. This is a simulation layer for strategy review and UI validation.",
+    plannedRisk: "Planned Risk",
+    allocationPct: "Allocation",
+    realMoneyMode: "Real-money style sizing: max 1% risk per trade, max 20% allocation per position, and cash reserve stays protected.",
+    bucketsTitle: "50/50 Portfolio Split",
+    momentumBucket: "Momentum",
+    qualityBucket: "Quality",
+    momentumDesc: "Faster setups with controlled risk",
+    qualityDesc: "Higher-confidence setups with tighter sizing",
+    bucketCapital: "Capital",
+    bucketRisk: "Risk/trade",
+    bucketCash: "Cash left",
+    marketOpen: "Market open",
+    marketClosed: "Market closed",
+    marketClock: "Exchange time",
+    marketClosedNote: "No new entries or exits are simulated while this market is closed. Existing positions are only marked with the latest available quote.",
   },
   th: {
     phase: "เฟส 1",
@@ -79,10 +94,25 @@ const COPY = {
     target: "เป้าหมาย",
     entry: "จุดเข้า",
     recentOrders: "คำสั่งจำลองล่าสุด",
-    recentOrdersSub: "รายการจำลองที่สร้างจากชุดสัญญาณล่าสุด",
+    recentOrdersSub: "บันทึกการเข้าออกที่เก็บใน paper ledger",
     noOrders: "วันนี้ยังไม่มีคำสั่งจำลอง",
     error: "โหลดข้อมูล Paper Trading ไม่สำเร็จ ตรวจสอบว่า backend รันอยู่",
     disclaimer: "หน้านี้ไม่ส่งคำสั่งเงินจริง เป็นชั้นจำลองสำหรับทดสอบกลยุทธ์และตรวจ UI เท่านั้น",
+    plannedRisk: "ความเสี่ยงที่วางไว้",
+    allocationPct: "สัดส่วนพอร์ต",
+    realMoneyMode: "คำนวณขนาดไม้แบบเงินจริง: เสี่ยงไม่เกิน 1% ต่อไม้ ลงไม่เกิน 20% ต่อสถานะ และกันเงินสดสำรองไว้เสมอ",
+    bucketsTitle: "แบ่งพอร์ต 50/50",
+    momentumBucket: "สายซิ่ง",
+    qualityBucket: "สายเน้นชัว",
+    momentumDesc: "ไม้ไว เน้นโมเมนตัม แต่คุมความเสี่ยง",
+    qualityDesc: "ไม้ที่เงื่อนไขแน่นกว่าและลดขนาดความเสี่ยง",
+    bucketCapital: "งบ",
+    bucketRisk: "เสี่ยง/ไม้",
+    bucketCash: "เงินเหลือ",
+    marketOpen: "ตลาดเปิด",
+    marketClosed: "ตลาดปิด",
+    marketClock: "เวลาตลาด",
+    marketClosedNote: "ตลาดนี้ยังไม่เปิด ระบบจะไม่จำลองการเข้า/ออกไม้ใหม่ และจะแสดงราคาล่าสุดเท่าที่แหล่งข้อมูลมีเท่านั้น",
   },
 };
 
@@ -113,6 +143,18 @@ function formatTime(value: string) {
   return date.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
 }
 
+function formatMarketTime(value?: string) {
+  if (!value) return "--:--";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "--:--";
+  return date.toLocaleString("en-US", {
+    month: "short",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 function pnlClass(value: number) {
   if (value > 0) return "text-bull";
   if (value < 0) return "text-bear";
@@ -129,6 +171,16 @@ function statusStyle(status: PaperPosition["status"]) {
   if (status === "target_near") return "border-bull/40 bg-bull/10 text-bull";
   if (status === "stop_near") return "border-bear/40 bg-bear/10 text-bear";
   return "border-accent/30 bg-accent/10 text-accent";
+}
+
+function bucketLabel(bucket: PaperPosition["bucket"] | PaperTrade["bucket"], copy: typeof COPY.en) {
+  return bucket === "momentum" ? copy.momentumBucket : copy.qualityBucket;
+}
+
+function bucketStyle(bucket: PaperPosition["bucket"] | PaperTrade["bucket"]) {
+  return bucket === "momentum"
+    ? "border-yellow-400/40 bg-yellow-400/10 text-yellow-300"
+    : "border-accent/40 bg-accent/10 text-accent";
 }
 
 function StatCard({
@@ -187,6 +239,39 @@ function MarketTabs({
   );
 }
 
+function MarketStatusBanner({
+  summary,
+  copy,
+}: {
+  summary: PaperTradingSummary;
+  copy: typeof COPY.en;
+}) {
+  const isOpen = summary.market_status?.is_open;
+
+  return (
+    <div
+      className={`rounded-lg border px-4 py-3 ${
+        isOpen
+          ? "border-bull/30 bg-bull/10 text-bull"
+          : "border-yellow-400/30 bg-yellow-400/10 text-yellow-200"
+      }`}
+    >
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-sm font-bold">
+            {isOpen ? copy.marketOpen : copy.marketClosed}
+          </p>
+          {!isOpen && <p className="mt-1 text-xs text-yellow-100/80">{copy.marketClosedNote}</p>}
+        </div>
+        <div className="text-xs font-semibold text-current/80">
+          {copy.marketClock}: {formatMarketTime(summary.market_status?.local_time)}
+          {summary.market_status?.timezone ? ` (${summary.market_status.timezone})` : ""}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function AllocationMeter({
   cash,
   invested,
@@ -227,6 +312,71 @@ function AllocationMeter({
         </div>
       </div>
       <p className="mt-2 text-[11px] text-neutral">{cashPct}% {copy.available}</p>
+    </div>
+  );
+}
+
+function BucketSplit({
+  summary,
+  currency,
+  copy,
+}: {
+  summary: PaperTradingSummary;
+  currency: string;
+  copy: typeof COPY.en;
+}) {
+  const buckets: Array<"momentum" | "quality"> = ["momentum", "quality"];
+
+  return (
+    <div className="rounded-lg border border-border bg-surface p-4">
+      <div className="mb-4">
+        <h2 className="text-lg font-bold">{copy.bucketsTitle}</h2>
+        <p className="text-xs text-neutral">{copy.realMoneyMode}</p>
+      </div>
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+        {buckets.map((bucket) => {
+          const data = summary.bucket_allocation[bucket];
+          const usedPct = data.capital ? Math.round((data.invested / data.capital) * 100) : 0;
+          return (
+            <div key={bucket} className="rounded-lg border border-border bg-bg p-3">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <span className={`rounded border px-2 py-1 text-xs font-bold ${bucketStyle(bucket)}`}>
+                    {bucketLabel(bucket, copy)}
+                  </span>
+                  <p className="mt-2 text-xs text-neutral">
+                    {bucket === "momentum" ? copy.momentumDesc : copy.qualityDesc}
+                  </p>
+                </div>
+                <span className="font-mono text-sm font-bold text-white">{data.capital_pct.toFixed(0)}%</span>
+              </div>
+              <div className="mt-3 h-2 rounded-full bg-surface">
+                <div
+                  className={bucket === "momentum" ? "h-full rounded-full bg-yellow-400" : "h-full rounded-full bg-accent"}
+                  style={{ width: `${Math.min(100, usedPct)}%` }}
+                />
+              </div>
+              <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
+                <div>
+                  <p className="text-neutral">{copy.bucketCapital}</p>
+                  <p className="font-mono font-bold text-white">{compactMoney(data.capital, currency)}</p>
+                </div>
+                <div>
+                  <p className="text-neutral">{copy.invested}</p>
+                  <p className="font-mono font-bold text-white">{compactMoney(data.invested, currency)}</p>
+                </div>
+                <div>
+                  <p className="text-neutral">{copy.bucketRisk}</p>
+                  <p className="font-mono font-bold text-white">{data.risk_per_trade_pct.toFixed(2)}%</p>
+                </div>
+              </div>
+              <p className="mt-2 text-[11px] text-neutral">
+                {data.positions} {copy.openPositions.toLowerCase()} · {copy.bucketCash} {compactMoney(data.cash, currency)}
+              </p>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -316,7 +466,7 @@ function PositionCard({
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <h3 className="truncate text-lg font-bold text-white">{position.symbol}</h3>
+            <h3 className="truncate text-lg font-bold text-white">{position.name}</h3>
             <span
               className={`rounded border px-2 py-0.5 text-[11px] font-bold uppercase ${
                 position.side === "long"
@@ -326,8 +476,11 @@ function PositionCard({
             >
               {position.side}
             </span>
+            <span className={`rounded border px-2 py-0.5 text-[11px] font-bold ${bucketStyle(position.bucket)}`}>
+              {bucketLabel(position.bucket, copy)}
+            </span>
           </div>
-          <p className="truncate text-xs text-neutral">{position.name}</p>
+          <p className="truncate text-xs text-neutral">{position.symbol}</p>
         </div>
         <span className={`rounded border px-2 py-1 text-[11px] font-semibold ${statusStyle(position.status)}`}>
           {position.status.replace("_", " ")}
@@ -351,6 +504,20 @@ function PositionCard({
             {compactMoney(position.market_value, currency)}
           </p>
           <p className="text-xs text-neutral">{number(position.quantity)} {copy.units}</p>
+        </div>
+      </div>
+
+      <div className="mt-4 grid grid-cols-2 gap-3 rounded-md border border-border bg-bg px-3 py-2 text-sm">
+        <div>
+          <p className="text-[11px] text-neutral">{copy.plannedRisk}</p>
+          <p className="font-mono font-bold text-bear">
+            {money(position.risk_amount, currency)}
+            <span className="ml-1 text-xs">({position.risk_pct.toFixed(2)}%)</span>
+          </p>
+        </div>
+        <div className="text-right">
+          <p className="text-[11px] text-neutral">{copy.allocationPct}</p>
+          <p className="font-mono font-bold text-white">{position.allocation_pct.toFixed(2)}%</p>
         </div>
       </div>
 
@@ -436,9 +603,26 @@ function TradesList({
               <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                 <span className="font-bold text-white">{trade.symbol}</span>
                 <span className="text-xs font-semibold uppercase text-neutral">{trade.side}</span>
+                <span
+                  className={`rounded border px-1.5 py-0.5 text-[10px] font-bold uppercase ${
+                    trade.event_type === "close"
+                      ? "border-bear/40 bg-bear/10 text-bear"
+                      : "border-bull/40 bg-bull/10 text-bull"
+                  }`}
+                >
+                  {trade.event_type}
+                </span>
+                <span className={`rounded border px-1.5 py-0.5 text-[10px] font-bold ${bucketStyle(trade.bucket)}`}>
+                  {bucketLabel(trade.bucket, copy)}
+                </span>
                 <span className="font-mono text-xs text-neutral">
                   {number(trade.quantity)} @ {money(trade.price, currency)}
                 </span>
+                {trade.pnl !== null && (
+                  <span className={`font-mono text-xs font-bold ${pnlClass(trade.pnl)}`}>
+                    {money(trade.pnl, currency)}
+                  </span>
+                )}
               </div>
               <p className="mt-1 truncate text-xs text-neutral">{trade.reason}</p>
             </div>
@@ -479,6 +663,9 @@ export default function PaperTradingPage() {
             <p className="mt-2 max-w-2xl text-sm text-neutral">
               {copy.subtitle}
             </p>
+            <p className="mt-2 max-w-3xl text-xs text-accent">
+              {copy.realMoneyMode}
+            </p>
           </div>
           <MarketTabs market={market} onChange={setMarket} lang={uiLang} />
         </div>
@@ -500,6 +687,8 @@ export default function PaperTradingPage() {
 
       {data && (
         <>
+          <MarketStatusBanner summary={data} copy={copy} />
+
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
             <div className="xl:col-span-2">
               <StatCard
@@ -534,6 +723,8 @@ export default function PaperTradingPage() {
             <DailyBars daily={data.daily} currency={data.currency} copy={copy} />
             <AllocationMeter cash={data.cash} invested={data.invested} currency={data.currency} copy={copy} />
           </div>
+
+          <BucketSplit summary={data} currency={data.currency} copy={copy} />
 
           <Positions positions={data.positions} currency={data.currency} copy={copy} />
 

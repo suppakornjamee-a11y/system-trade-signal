@@ -119,19 +119,26 @@ export interface PaperDailyPnL {
 }
 
 export interface PaperPosition {
+  id: number;
   symbol: string;
   name: string;
   side: "long" | "short";
+  bucket: "momentum" | "quality";
+  bucket_label: string;
   quantity: number;
   entry_price: number;
   current_price: number;
   market_value: number;
+  risk_amount: number;
+  risk_pct: number;
+  allocation_pct: number;
   unrealized_pnl: number;
   unrealized_pnl_pct: number;
   stop_loss: number;
   target: number;
   probability_pct: number;
   status: "open" | "target_near" | "stop_near";
+  opened_at: string;
 }
 
 export interface PaperTrade {
@@ -139,10 +146,13 @@ export interface PaperTrade {
   time: string;
   symbol: string;
   side: "long" | "short";
+  bucket: "momentum" | "quality";
+  event_type: "open" | "close";
   quantity: number;
   price: number;
   status: string;
   reason: string;
+  pnl: number | null;
 }
 
 export interface PaperTradingSummary {
@@ -150,6 +160,13 @@ export interface PaperTradingSummary {
   market: Market;
   currency: string;
   generated_at: string;
+  market_status: {
+    market: string;
+    is_open: boolean;
+    local_time?: string;
+    timezone?: string;
+    reason?: string;
+  };
   starting_cash: number;
   cash: number;
   equity: number;
@@ -159,6 +176,18 @@ export interface PaperTradingSummary {
   open_positions: number;
   win_rate_pct: number;
   max_drawdown_pct: number;
+  bucket_allocation: Record<
+    "momentum" | "quality",
+    {
+      label: string;
+      capital: number;
+      invested: number;
+      cash: number;
+      positions: number;
+      capital_pct: number;
+      risk_per_trade_pct: number;
+    }
+  >;
   positions: PaperPosition[];
   recent_trades: PaperTrade[];
   daily: PaperDailyPnL[];

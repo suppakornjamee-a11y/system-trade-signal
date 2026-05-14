@@ -12,8 +12,8 @@ MARKET_SESSIONS = {
         "sessions": ((time(10, 0), time(12, 30)), (time(14, 30), time(16, 30))),
     },
     "cn": {
-        "timezone": "Asia/Shanghai",
-        "sessions": ((time(9, 30), time(11, 30)), (time(13, 0), time(15, 0))),
+        "timezone": "Asia/Hong_Kong",
+        "sessions": ((time(9, 30), time(12, 0)), (time(13, 0), time(16, 0))),
     },
     "gold": {
         "timezone": "America/New_York",

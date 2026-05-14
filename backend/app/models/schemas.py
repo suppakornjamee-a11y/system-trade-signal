@@ -100,19 +100,26 @@ class PaperDailyPnL(BaseModel):
 
 
 class PaperPosition(BaseModel):
+    id: int
     symbol: str
     name: str
     side: str  # long | short
+    bucket: str  # momentum | quality
+    bucket_label: str
     quantity: float
     entry_price: float
     current_price: float
     market_value: float
+    risk_amount: float
+    risk_pct: float
+    allocation_pct: float
     unrealized_pnl: float
     unrealized_pnl_pct: float
     stop_loss: float
     target: float
     probability_pct: float
     status: str  # open | target_near | stop_near
+    opened_at: str
 
 
 class PaperTrade(BaseModel):
@@ -120,10 +127,13 @@ class PaperTrade(BaseModel):
     time: str
     symbol: str
     side: str
+    bucket: str
+    event_type: str  # open | close
     quantity: float
     price: float
     status: str
     reason: str
+    pnl: Optional[float] = None
 
 
 class PaperTradingSummary(BaseModel):
@@ -131,6 +141,7 @@ class PaperTradingSummary(BaseModel):
     market: str
     currency: str
     generated_at: str
+    market_status: dict
     starting_cash: float
     cash: float
     equity: float
@@ -140,6 +151,7 @@ class PaperTradingSummary(BaseModel):
     open_positions: int
     win_rate_pct: float
     max_drawdown_pct: float
+    bucket_allocation: dict
     positions: list[PaperPosition]
     recent_trades: list[PaperTrade]
     daily: list[PaperDailyPnL]
