@@ -7,6 +7,7 @@ frontend/.env.*
 !.env.example
 !backend/.env.example
 !frontend/.env.example
+frontend/*.log
 
 __pycache__/
 *.pyc

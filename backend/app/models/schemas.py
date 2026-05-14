@@ -90,3 +90,56 @@ class PriceUpdate(BaseModel):
     change_pct: float
     volume: int
     timestamp: int
+
+
+class PaperDailyPnL(BaseModel):
+    date: str
+    equity: float
+    pnl: float
+    pnl_pct: float
+
+
+class PaperPosition(BaseModel):
+    symbol: str
+    name: str
+    side: str  # long | short
+    quantity: float
+    entry_price: float
+    current_price: float
+    market_value: float
+    unrealized_pnl: float
+    unrealized_pnl_pct: float
+    stop_loss: float
+    target: float
+    probability_pct: float
+    status: str  # open | target_near | stop_near
+
+
+class PaperTrade(BaseModel):
+    id: str
+    time: str
+    symbol: str
+    side: str
+    quantity: float
+    price: float
+    status: str
+    reason: str
+
+
+class PaperTradingSummary(BaseModel):
+    mode: str
+    market: str
+    currency: str
+    generated_at: str
+    starting_cash: float
+    cash: float
+    equity: float
+    invested: float
+    daily_pnl: float
+    daily_pnl_pct: float
+    open_positions: int
+    win_rate_pct: float
+    max_drawdown_pct: float
+    positions: list[PaperPosition]
+    recent_trades: list[PaperTrade]
+    daily: list[PaperDailyPnL]

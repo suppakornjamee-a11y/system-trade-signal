@@ -110,3 +110,56 @@ export interface PriceUpdate {
   volume: number;
   timestamp: number;
 }
+
+export interface PaperDailyPnL {
+  date: string;
+  equity: number;
+  pnl: number;
+  pnl_pct: number;
+}
+
+export interface PaperPosition {
+  symbol: string;
+  name: string;
+  side: "long" | "short";
+  quantity: number;
+  entry_price: number;
+  current_price: number;
+  market_value: number;
+  unrealized_pnl: number;
+  unrealized_pnl_pct: number;
+  stop_loss: number;
+  target: number;
+  probability_pct: number;
+  status: "open" | "target_near" | "stop_near";
+}
+
+export interface PaperTrade {
+  id: string;
+  time: string;
+  symbol: string;
+  side: "long" | "short";
+  quantity: number;
+  price: number;
+  status: string;
+  reason: string;
+}
+
+export interface PaperTradingSummary {
+  mode: "paper";
+  market: Market;
+  currency: string;
+  generated_at: string;
+  starting_cash: number;
+  cash: number;
+  equity: number;
+  invested: number;
+  daily_pnl: number;
+  daily_pnl_pct: number;
+  open_positions: number;
+  win_rate_pct: number;
+  max_drawdown_pct: number;
+  positions: PaperPosition[];
+  recent_trades: PaperTrade[];
+  daily: PaperDailyPnL[];
+}

@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .config import settings
-from .routers import screener, stocks, ws, news, signals
+from .routers import screener, stocks, ws, news, signals, paper_trading
 from .services.signal_scheduler import run_signal_scheduler
 
 logger = logging.getLogger("uvicorn.error")
@@ -26,6 +26,7 @@ app.include_router(stocks.router, prefix="/api/stocks", tags=["stocks"])
 app.include_router(ws.router, tags=["websocket"])
 app.include_router(news.router, prefix="/api/news", tags=["news"])
 app.include_router(signals.router, prefix="/api/signals", tags=["signals"])
+app.include_router(paper_trading.router, prefix="/api/paper-trading", tags=["paper-trading"])
 
 
 @app.on_event("startup")

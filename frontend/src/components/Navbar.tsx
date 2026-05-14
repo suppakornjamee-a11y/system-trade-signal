@@ -21,6 +21,13 @@ export default function Navbar() {
         <span className="ml-2 text-xs text-neutral font-normal">US Market</span>
       </Link>
 
+      <Link
+        href="/paper-trading"
+        className="text-sm font-semibold text-neutral hover:text-white transition"
+      >
+        Paper Trading
+      </Link>
+
       <form onSubmit={handleSearch} className="flex gap-2 flex-1 max-w-sm">
         <input
           type="text"

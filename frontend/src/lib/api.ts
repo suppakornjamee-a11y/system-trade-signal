@@ -1,4 +1,4 @@
-import type { StockDetail, StockSummary, CandleBar } from "./types";
+import type { StockDetail, StockSummary, CandleBar, PaperTradingSummary } from "./types";
 
 const BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -28,4 +28,6 @@ export const api = {
     fetchJson<{ title: string }>(
       `/api/news/translate?title=${encodeURIComponent(title)}`
     ),
+  paperTradingSummary: (market = "us") =>
+    fetchJson<PaperTradingSummary>(`/api/paper-trading/summary?market=${market}`),
 };
