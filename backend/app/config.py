@@ -40,6 +40,8 @@ class Settings(BaseSettings):
     snack_trade_max_per_market: int = 1
     snack_trade_max_entry_distance_pct: float = 8.0
     snack_trade_min_target_room_pct: float = 1.0
+    snack_signal_dedupe_ttl_minutes: int = 240
+    crypto_signal_dedupe_ttl_minutes: int = 180
     gold_scalp_enabled: bool = True
     gold_scalp_dedupe_ttl_minutes: int = 45
     gold_scalp_min_score: float = 58.0

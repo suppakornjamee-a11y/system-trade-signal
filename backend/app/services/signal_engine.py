@@ -100,7 +100,10 @@ def _gold_scalp_signal() -> dict | None:
     symbol = ""
     name = "Gold Spot"
     df = None
-    for candidate, candidate_name in (("GC=F", "Gold Futures"),):
+    for candidate, candidate_name in (
+        ("GC=F", "Gold Futures"),
+        ("MGC=F", "Micro Gold Futures"),
+    ):
         try:
             candidate_df = get_history(candidate, period="1d", interval="5m")
         except Exception:
@@ -462,11 +465,14 @@ def build_trade_signals(market: str = "us") -> list[dict]:
 def should_send_signal(signal: dict) -> bool:
     signal_type = signal.get("style") or ("snack" if signal.get("is_snack_trade") else "main")
     key = f"signal:last_sent:{signal['symbol']}:{signal['direction']}:{signal_type}"
-    ttl_seconds = (
-        settings.gold_scalp_dedupe_ttl_minutes * 60
-        if signal_type == "gold_scalp"
-        else settings.signal_dedupe_ttl_hours * 60 * 60
-    )
+    if signal_type == "gold_scalp":
+        ttl_seconds = settings.gold_scalp_dedupe_ttl_minutes * 60
+    elif signal.get("market") == "crypto":
+        ttl_seconds = settings.crypto_signal_dedupe_ttl_minutes * 60
+    elif signal.get("is_snack_trade"):
+        ttl_seconds = settings.snack_signal_dedupe_ttl_minutes * 60
+    else:
+        ttl_seconds = settings.signal_dedupe_ttl_hours * 60 * 60
     return _cache.get(key, ttl_seconds) is None
 
 
